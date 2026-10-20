@@ -6,6 +6,8 @@
 //      `return` sau frame đầu nên frame kế bị đợi lượt feed sau.
 //   2. Namespaced enum BmsFrameEvent thay cho chuỗi trả về.
 
+import Foundation
+
 public enum BmsFrameEvent: Equatable, Sendable {
     case jk
     case ant
@@ -28,15 +30,15 @@ public final class UniversalBmsParser: @unchecked Sendable {
     /// Giá trị BRAND khi chưa nhận diện được hãng nào.
     public static let unknownBrand = "Tự động nhận diện"
 
-    public private(set) var buffer: [UInt8] = []
-    public private(set) var deviceInfo = BMSDeviceInfo()
-    public private(set) var settingsInfo = BMSSettingsInfo()
-    public private(set) var live = BMSLiveTelemetry()
+    public internal(set) var buffer: [UInt8] = []
+    public internal(set) var deviceInfo = BMSDeviceInfo()
+    public internal(set) var settingsInfo = BMSSettingsInfo()
+    public internal(set) var live = BMSLiveTelemetry()
 
-    public private(set) var hasDeviceInfo = false
-    public private(set) var hasSettingsInfo = false
-    public private(set) var hasCellInfo = false
-    public private(set) var bmsBrand: String = Self.unknownBrand
+    public internal(set) var hasDeviceInfo = false
+    public internal(set) var hasSettingsInfo = false
+    public internal(set) var hasCellInfo = false
+    public internal(set) var bmsBrand: String = UniversalBmsParser.unknownBrand
 
     public init(mode: Mode = .auto) {
         self.mode = mode

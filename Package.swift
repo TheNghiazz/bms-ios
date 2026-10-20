@@ -6,6 +6,10 @@ import PackageDescription
 let package = Package(
     name: "BMSCore",
     platforms: [.iOS(.v17), .macOS(.v13)],
+    products: [
+        .library(name: "BMSCore", targets: ["BMSCore"]),
+        .executable(name: "bmscore-check", targets: ["BMSCoreCheck"]),
+    ],
     targets: [
         .target(
             name: "BMSCore",

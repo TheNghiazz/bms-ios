@@ -8,9 +8,9 @@ import Foundation
 
 #if canImport(Darwin)
 import Darwin
-#else if canImport(Glibc)
+#elseif canImport(Glibc)
 import Glibc
-#else if canImport(ucrt)
+#elseif canImport(ucrt)
 import ucrt
 #endif
 
