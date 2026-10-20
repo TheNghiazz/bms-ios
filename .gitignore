@@ -20,3 +20,7 @@ xcuserdata/
 # Python
 __pycache__/
 *.pyc
+
+# Windows build artifacts
+/Info.plist
+/golden_vectors.json
