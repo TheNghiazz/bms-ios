@@ -1,0 +1,22 @@
+# Chỉ commit source, artifact sinh ra không vào repo
+.build/
+DerivedData/
+build/
+*.ipa
+Payload/
+
+# xcodeproj được sinh bởi XcodeGen từ project.yml
+*.xcodeproj
+App/Info.plist
+
+# Swift
+.swiftpm/
+*.xcscheme
+
+# macOS / Xcode
+.DS_Store
+xcuserdata/
+
+# Python
+__pycache__/
+*.pyc

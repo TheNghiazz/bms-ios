@@ -1,0 +1,42 @@
+name: BMSMonitor
+options:
+  bundleIdPrefix: vn.personal.bms
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+packages:
+  BMSCore:
+    path: .
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    CODE_SIGN_STYLE: Automatic
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 0.1.0
+targets:
+  BMSMonitor:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+    dependencies:
+      - package: BMSCore
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: BMS Monitor
+        CFBundleShortVersionString: "0.1.0"
+        NSBluetoothAlwaysUsageDescription: >-
+          Ứng dụng cần Bluetooth để quét và đọc dữ liệu từ mạch BMS
+          (JK-BMS, ANT-BMS, JBD, Daly). Không có dữ liệu nào rời khỏi máy.
+        ITSAppUsesNonExemptEncryption: false
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+schemes:
+  BMSMonitor:
+    build:
+      targets:
+        BMSMonitor: all
+    run:
+      config: Debug
