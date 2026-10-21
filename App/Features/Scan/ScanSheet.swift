@@ -39,6 +39,29 @@ struct ScanSheet: View {
                     }
                 }
             }
+            if store.isLive || !store.session.diagnostics.isEmpty {
+                Section("Chẩn đoán BLE — \(store.session.readMode.rawValue)") {
+                    if store.session.readMode == .polling {
+                        Button {
+                            store.session.pollNow()
+                        } label: {
+                            Label("Đọc ngay (1 lần)", systemImage: "arrow.clockwise")
+                                .font(.footnote)
+                        }
+                    }
+                    if store.session.diagnostics.isEmpty {
+                        Text("Chưa kết nối thiết bị nào để xem dịch vụ.")
+                            .font(.caption2)
+                            .foregroundStyle(Color.bmsMuted)
+                    } else {
+                        ForEach(store.session.diagnostics, id: \.self) { line in
+                            Text(line)
+                                .font(.caption2.monospaced())
+                                .foregroundStyle(Color.bmsMuted)
+                        }
+                    }
+                }
+            }
             Section("Chế độ demo (không cần BLE)") {
                 ForEach(demoNames, id: \.name) { demo in
                     Button {
