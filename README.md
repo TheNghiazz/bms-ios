@@ -19,8 +19,11 @@ bms-ios/
 │  ├─ BMSStore.swift              trạng thái chung (parser + session)
 │  ├─ BLE/BLESession.swift        CoreBluetooth: quét/kết nối/heartbeat
 │  ├─ Features/Dashboard/         dashboard live: ETA, SOC, cell grid
-│  └─ Features/Scan/ScanSheet.swift
+│  ├─ Features/Scan/ScanSheet.swift
+│  ├─ Features/Lock/              khoá app bằng mật khẩu (mặc định "ngia")
+│  └─ Assets.xcassets/            icon app (AppIcon 1024, sinh bởi tools/gen_app_icon.py)
 ├─ tools/gen_golden_vectors.py    sinh golden vectors từ code Python gốc
+├─ tools/gen_app_icon.py          sinh icon app 1024x1024 (thuần stdlib)
 ├─ tools/reference/               BẢN COPY file Python gốc làm oracle
 ├─ docs/protocol.md               đặc tả offset từng hãng + bug đã biết
 ├─ project.yml                    XcodeGen (sinh .xcodeproj)
@@ -77,11 +80,35 @@ hoặc copy `link.exe`/`lib.exe` vào `…\Swift\Toolchains\<ver>\usr\bin`.
   python tools/gen_golden_vectors.py
   ```
 
+- **Sinh lại icon app** (sửa màu/hình trong script rồi chạy):
+  ```
+  python tools/gen_app_icon.py
+  ```
+  Script chỉ dùng stdlib nên chạy được cả trên Windows, không cần Pillow.
+  Bundle ID: `vn.ngia.bmsreader` (khai báo trong `project.yml`).
+
 ## Chế độ demo trong app
 
 Mở app là dữ liệu mẫu ANT 17S 60V/30Ah hiển thị sẵn (giống hành vi GUI gốc),
 menu có thêm mẫu JK 24S, JK 32S, JBD, Daly. Từ đây có thể kiểm toàn bộ số
 liệu HIỂN THỊ trước khi cắm mạch thật.
+
+## Khoá app bằng mật khẩu
+
+- App hỏi mật khẩu ngay khi mở. **Mật khẩu mặc định lần đầu: `ngia`**
+  (màn hình khoá hiện gợi ý này chừng nào chưa đổi).
+- **Tự khoá khi app xuống background** (app switcher, thoát ra), chỉ dùng
+  `.background` nên hộp thoại xin quyền Bluetooth / Control Center không khoá
+  giữa chừng.
+- **Sai 5 lần liên tiếp → tạm khoá 30 giây** (có đếm ngược; trạng thái được
+  lưu nên thoát app rồi mở lại vẫn phải chờ đủ).
+- Đổi mật khẩu: menu **⋯ → Đổi mật khẩu** (cần nhập mật khẩu hiện tại,
+  mật khẩu mới tối thiểu 4 ký tự). **⋯ → Khoá app** để khoá lại ngay.
+- Chỉ lưu `SHA-256(salt + mật khẩu)` trong `UserDefaults`, không lưu mật khẩu
+  gốc và không dùng Keychain (tránh mất quyền truy cập sau khi re-sign bằng
+  Apple ID free).
+- Quên mật khẩu: xoá app rồi cài lại — mật khẩu (và settings) về mặc định.
+  Đây là lớp chặn mở app, không mã hoá dữ liệu BMS.
 
 ## Roadmap
 
@@ -89,7 +116,9 @@ liệu HIỂN THỊ trước khi cắm mạch thật.
 - [x] Phase 3 — parser Swift + tests (chạy trên CI hoặc `swift test` local)
 - [x] Phase 4 — BLESession (quét/kết nối/heartbeat; test với mạch thật tại Phase 8)
 - [x] Phase 5 — dashboard UI v1 (Phase 6 nâng cấp chỉnh theo bản Tkinter)
-- [ ] Phase 6 — nhớ thiết bị (UUID), settings, icon
+- [x] App icon (`App/Assets.xcassets`) + bundle ID `vn.ngia.bmsreader`
+- [x] Khoá app bằng mật khẩu (mặc định `ngia`, tự khoá khi background, chặn 5 lần sai)
+- [ ] Phase 6 — nhớ thiết bị (UUID), settings
 - [ ] Phase 7 — ổn định iOS (quyền, lỗi, background)
 - [ ] Phase 8 — test với mạch thật từng hãng
 - [ ] Phase 9 — close-out: đã quy trình re-sign, README hoàn chỉnh
