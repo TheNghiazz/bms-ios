@@ -92,6 +92,7 @@ final class BLESession: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     func connect(deviceName displayName: String) {
         guard let target = known[displayName] else { return }
         disconnect(silent: true)
+        parser.reset()          // không trộn dữ liệu demo với dữ liệu mạch thật
         connectedName = displayName
         status = "Đang kết nối [\(displayName)]..."
         central?.connect(target)

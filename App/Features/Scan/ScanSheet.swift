@@ -77,6 +77,10 @@ struct ScanSheet: View {
         }
         .navigationTitle("Quét & kết nối")
         .navigationBarTitleDisplayMode(.inline)
+        .scrollContentBackground(.hidden)
+        .background(Color.bmsBg.ignoresSafeArea())
+        .tint(Color.bmsGreen)
+        .preferredColorScheme(.dark)
         .onAppear { if !store.isLive { store.session.toggleScanOrConnect() } }
     }
 

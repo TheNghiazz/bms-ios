@@ -5,6 +5,11 @@ Port từ `universal_bms_ble_reader.py` (Tkinter + bleak, Windows) sang app iOS
 Logic giải mã được port ra **Swift Package thuần (`BMSCore`)** và đối chiếu
 số liệu bằng **golden vectors** sinh từ chính code Python gốc.
 
+App tập trung vào **lấy dữ liệu từ mạch**: hãng/mạch BMS, thông tin thiết bị
+(model, serial, phiên bản, ngày sản xuất, thời gian chạy) và **mật khẩu**
+(PIN BLE, mật khẩu cài đặt). Không hiển thị dung lượng pin, điện áp, dòng
+điện hay % pin.
+
 ## Cấu trúc
 
 ```
@@ -18,9 +23,8 @@ bms-ios/
 │  ├─ BMSMonitorApp.swift         @main + RootView
 │  ├─ BMSStore.swift              trạng thái chung (parser + session)
 │  ├─ BLE/BLESession.swift        CoreBluetooth: quét/kết nối/heartbeat
-│  ├─ Features/Dashboard/         dashboard live: ETA, SOC, cell grid
-│  ├─ Features/Scan/ScanSheet.swift
-│  ├─ Features/Lock/              khoá app bằng mật khẩu (mặc định "ngia")
+│  ├─ Features/Device/            UI dữ liệu: mạch + thiết bị + mật khẩu
+│  ├─ Features/Scan/ScanSheet.swift  quét/kết nối BLE + dữ liệu mẫu
 │  └─ Assets.xcassets/            icon app (AppIcon 1024, sinh bởi tools/gen_app_icon.py)
 ├─ tools/gen_golden_vectors.py    sinh golden vectors từ code Python gốc
 ├─ tools/gen_app_icon.py          sinh icon app 1024x1024 (thuần stdlib)
@@ -87,37 +91,32 @@ hoặc copy `link.exe`/`lib.exe` vào `…\Swift\Toolchains\<ver>\usr\bin`.
   Script chỉ dùng stdlib nên chạy được cả trên Windows, không cần Pillow.
   Bundle ID: `vn.ngia.bmsreader` (khai báo trong `project.yml`).
 
+## Màn hình dữ liệu
+
+- **Hero**: trạng thái BLE (chấm nhấp nháy), hãng mạch, giao thức, số cell,
+  cách đọc (notify/indicate/poll) và nút Kết nối/Ngắt.
+- **Mạch BMS**: hãng, giao thức, cell cấu hình / cell đọc được, cách đọc.
+- **Thông tin thiết bị**: tên, model, serial, ngày sản xuất, phiên bản HW/SW,
+  dữ liệu người dùng, thời gian chạy + số lần bật.
+- **Mật khẩu**: PIN BLE, mật khẩu cài đặt, mật khẩu kết nối — ẩn mặc định,
+  nhấn 👁 để hiện, nhấn biểu tượng để sao chép (có phản hồi rung).
+- Cảnh báo bit lỗi từ mạch và lỗi BLE hiển thị dạng banner.
+- Chuyển động: card hiện lần lượt khi mở, quầng sáng trôi chậm, giá trị đổi
+  mượt; tự tắt khi bật *Reduce Motion*.
+
 ## Chế độ demo trong app
 
-Mở app là dữ liệu mẫu ANT 17S 60V/30Ah hiển thị sẵn (giống hành vi GUI gốc),
-menu có thêm mẫu JK 24S, JK 32S, JBD, Daly. Từ đây có thể kiểm toàn bộ số
-liệu HIỂN THỊ trước khi cắm mạch thật.
-
-## Khoá app bằng mật khẩu
-
-- App hỏi mật khẩu ngay khi mở. **Mật khẩu mặc định lần đầu: `ngia`**
-  (màn hình khoá hiện gợi ý này chừng nào chưa đổi).
-- **Tự khoá khi app xuống background** (app switcher, thoát ra), chỉ dùng
-  `.background` nên hộp thoại xin quyền Bluetooth / Control Center không khoá
-  giữa chừng.
-- **Sai 5 lần liên tiếp → tạm khoá 30 giây** (có đếm ngược; trạng thái được
-  lưu nên thoát app rồi mở lại vẫn phải chờ đủ).
-- Đổi mật khẩu: menu **⋯ → Đổi mật khẩu** (cần nhập mật khẩu hiện tại,
-  mật khẩu mới tối thiểu 4 ký tự). **⋯ → Khoá app** để khoá lại ngay.
-- Chỉ lưu `SHA-256(salt + mật khẩu)` trong `UserDefaults`, không lưu mật khẩu
-  gốc và không dùng Keychain (tránh mất quyền truy cập sau khi re-sign bằng
-  Apple ID free).
-- Quên mật khẩu: xoá app rồi cài lại — mật khẩu (và settings) về mặc định.
-  Đây là lớp chặn mở app, không mã hoá dữ liệu BMS.
+Mở app là dữ liệu mẫu ANT hiển thị sẵn (giống hành vi GUI gốc); trong
+**Quét & kết nối** có thêm mẫu JK 24S, JK 32S, JBD, Daly. Từ đây có thể kiểm
+tra toàn bộ dữ liệu HIỂN THỊ trước khi cắm mạch thật.
 
 ## Roadmap
 
 - [x] Phase 1 — golden vectors + đặc tả (`docs/protocol.md`)
 - [x] Phase 3 — parser Swift + tests (chạy trên CI hoặc `swift test` local)
 - [x] Phase 4 — BLESession (quét/kết nối/heartbeat; test với mạch thật tại Phase 8)
-- [x] Phase 5 — dashboard UI v1 (Phase 6 nâng cấp chỉnh theo bản Tkinter)
+- [x] Phase 5 — UI dữ liệu tối giản: mạch + thiết bị + mật khẩu (animation smooth)
 - [x] App icon (`App/Assets.xcassets`) + bundle ID `vn.ngia.bmsreader`
-- [x] Khoá app bằng mật khẩu (mặc định `ngia`, tự khoá khi background, chặn 5 lần sai)
 - [ ] Phase 6 — nhớ thiết bị (UUID), settings
 - [ ] Phase 7 — ổn định iOS (quyền, lỗi, background)
 - [ ] Phase 8 — test với mạch thật từng hãng
