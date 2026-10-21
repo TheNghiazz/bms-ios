@@ -28,6 +28,7 @@ struct DashboardView: View {
                 infoStrip(live: live)
                 etaBanner(live: live, eta: eta)
                 socGaugeCard(live: live)
+                capacityCard(live: live)
                 metricsGrid(live: live)
                 cellsGrid(live: live)
                 deviceInfoCard
@@ -113,11 +114,11 @@ struct DashboardView: View {
 
     private func socGaugeCard(live: BMSLiveTelemetry) -> some View {
         VStack(spacing: 6) {
-            SOCIndicator(percent: live.socPercent,
+            SOCIndicator(percent: store.displaySocPercent,
                          subtitle: String(
                             format: "%.1f / %.1f Ah",
                             live.remainingCapacityAh,
-                            live.nominalCapacityAh))
+                            store.capacityAh))
             Text(live.chargingMosOn ? "MOS SẠC: BẬT"
                     : (live.dischargingMosOn ? "MOS XẢ: BẬT" : "STANDBY"))
                 .font(.caption2.weight(.bold))
@@ -126,6 +127,53 @@ struct DashboardView: View {
                                         : Color.bmsMuted))
         }
         .frame(maxWidth: .infinity)
+        .padding(12)
+        .background(Color.bmsCard)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    /// Cho phép nhập dung lượng pin khi BMS không khai báo Ah — nhờ đó % pin
+    /// và ETA vẫn hoạt động.
+    private func capacityCard(live: BMSLiveTelemetry) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("DUNG LƯỢNG KHỐI PIN")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(Color.bmsMuted)
+            HStack {
+                Text("Mạch báo")
+                    .font(.footnote)
+                    .foregroundStyle(Color.bmsMuted)
+                Spacer()
+                Text(live.nominalCapacityAh > 0
+                     ? String(format: "%.1f Ah", live.nominalCapacityAh)
+                     : "không có")
+                    .font(.footnote.monospaced())
+                    .foregroundStyle(live.nominalCapacityAh > 0
+                                     ? Color.bmsText : Color.bmsAmber)
+            }
+            HStack {
+                Text("Nhập tay (Ah)")
+                    .font(.footnote)
+                    .foregroundStyle(Color.bmsMuted)
+                Spacer()
+                TextField("0", value: $store.manualCapacityAh, format: .number)
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .font(.footnote.monospaced())
+                    .frame(width: 90)
+            }
+            if store.capacityAh <= 0 {
+                Text("Mạch không gửi dung lượng — nhập số Ah in trên pin "
+                     + "(ví dụ 30) để tính % và thời gian sạc/xả.")
+                    .font(.caption2)
+                    .foregroundStyle(Color.bmsAmber)
+            } else if live.socPercent == 0 && store.displaySocPercent > 0 {
+                Text("Mạch không gửi % pin — đang tự tính từ dung lượng còn lại.")
+                    .font(.caption2)
+                    .foregroundStyle(Color.bmsMuted)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .background(Color.bmsCard)
         .clipShape(RoundedRectangle(cornerRadius: 12))

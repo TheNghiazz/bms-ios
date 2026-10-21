@@ -323,7 +323,9 @@ final class BLESession: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     }
 
     private func startActivationSequence() {
-        if let write = writeChar { writeCommand(BMSCommand.antWakeup, to: write) }
+        guard let write = writeChar else { return }
+        // Thăm dò "toàn năng": mạch nào hiểu lệnh nào thì trả lời lệnh đó.
+        writeCommand(BMSCommand.antWakeup, to: write)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             guard let self, let write = self.writeChar, self.isConnected else { return }
             self.writeCommand(
@@ -336,26 +338,68 @@ final class BLESession: NSObject, ObservableObject, CBCentralManagerDelegate, CB
                 BMSCommand.jkFrame(cmd: BMSCommand.jkCellInfoCmd, counter: 2),
                 to: write)
         }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) { [weak self] in
+            guard let self, let write = self.writeChar, self.isConnected else { return }
+            self.writeCommand(BMSCommand.jbdRead(cmd: 0x03), to: write)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) { [weak self] in
+            guard let self, let write = self.writeChar, self.isConnected else { return }
+            self.writeCommand(BMSCommand.jbdRead(cmd: 0x04), to: write)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.7) { [weak self] in
+            guard let self, let write = self.writeChar, self.isConnected else { return }
+            self.writeCommand(BMSCommand.dalyStatusRequest, to: write)
+        }
     }
 
     private func heartbeatTick() {
         tickStep += 1
         guard tickStep % 2 == 0, let write = writeChar, isConnected else { return }
+        let counter = UInt8(tickStep % 250)
+
         switch parser.bmsBrand {
         case "ANT-BMS":
             writeCommand(BMSCommand.antWakeup, to: write)
+
         case "JK-BMS":
-            writeCommand(
-                BMSCommand.jkFrame(cmd: BMSCommand.jkCellInfoCmd,
-                                   counter: UInt8(tickStep % 250)),
-                to: write)
+            // 0x02 = dữ liệu live; định kỳ 0x03 để lấy lại dung lượng/ thông tin.
+            if tickStep % 12 == 0 {
+                writeCommand(
+                    BMSCommand.jkFrame(cmd: BMSCommand.jkDeviceInfoCmd, counter: counter),
+                    to: write)
+            } else {
+                writeCommand(
+                    BMSCommand.jkFrame(cmd: BMSCommand.jkCellInfoCmd, counter: counter),
+                    to: write)
+            }
+
+        case "JBD BMS":
+            // 0x03 trả SOC + Ah; 0x04 trả điện áp cell → đọc xen kẽ.
+            if tickStep % 4 == 0 {
+                writeCommand(BMSCommand.jbdRead(cmd: 0x03), to: write)
+            } else {
+                writeCommand(BMSCommand.jbdRead(cmd: 0x04), to: write)
+            }
+
+        case "Daly BMS":
+            writeCommand(BMSCommand.dalyStatusRequest, to: write)
+
         default:
-            // Chưa nhận diện hãng: thăm dò cả hai như bản gốc
-            writeCommand(BMSCommand.antWakeup, to: write)
-            writeCommand(
-                BMSCommand.jkFrame(cmd: BMSCommand.jkCellInfoCmd,
-                                   counter: UInt8(tickStep % 250)),
-                to: write)
+            // Chưa nhận diện hãng: luân phiên thăm dò từng họ, tránh dội lệnh.
+            switch tickStep % 8 {
+            case 0:
+                writeCommand(BMSCommand.antWakeup, to: write)
+            case 2:
+                writeCommand(
+                    BMSCommand.jkFrame(cmd: BMSCommand.jkCellInfoCmd, counter: counter),
+                    to: write)
+            case 4:
+                writeCommand(BMSCommand.jbdRead(cmd: 0x03), to: write)
+            case 6:
+                writeCommand(BMSCommand.dalyStatusRequest, to: write)
+            default:
+                break
+            }
         }
     }
 

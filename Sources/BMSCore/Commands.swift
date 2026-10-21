@@ -25,6 +25,22 @@ public enum BMSCommand {
     public static let jkCellInfoCmd: UInt8 = 0x96
     public static let jkDeviceInfoCmd: UInt8 = 0x97
 
+    /// JBD / Xiaoxiang: yêu cầu đọc — 0x03 = thông tin cơ bản (SOC, Ah),
+    /// 0x04 = điện áp từng cell. Khung: DD A5 <cmd> 00 FF <crc> 77.
+    public static func jbdRead(cmd: UInt8) -> [UInt8] {
+        let crc = UInt8((0x100 - (Int(cmd) & 0xFF)) & 0xFF)
+        return [0xDD, 0xA5, cmd & 0xFF, 0x00, 0xFF, crc, 0x77]
+    }
+
+    /// Daly: yêu cầu khung trạng thái 0x90. Khung 13 byte, byte cuối là
+    /// tổng [0..<12] & 0xFF.
+    public static var dalyStatusRequest: [UInt8] {
+        var frame: [UInt8] = [0xA5, 0x40, 0x90, 0x08,
+                              0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        frame.append(UInt8(BMSChecksum.sum8(frame) & 0xFF))
+        return frame
+    }
+
     /// Dựng khung lệnh JK 20 byte (build_jk_command_frame trong bản gốc):
     /// AA 55 90 EB | cmd | 00 ...(114 byte đệm)... | counter @16 | CRC @19
     public static func jkFrame(cmd: UInt8, counter: UInt8 = 1) -> [UInt8] {
