@@ -51,6 +51,27 @@ bms-ios/
   swift test           # XCTest
   swift run bmscore-check   # không cần XCTest
   ```
+### Build BMSCore trên Windows (Swift 6.4+)
+
+Swift 6.4 chuyển stdlib sang **Swift SDK tách rời** — nếu chỉ cài toolchain,
+`swift build` sẽ báo `unable to load standard library for target`.
+Cần trỏ `SDKROOT` vào Windows SDK đi kèm:
+
+```powershell
+$swift = "$env:LOCALAPPDATA\Programs\Swift"
+$env:Path = "$swift\Toolchains\6.4.1+Asserts\usr\bin;$swift\Runtimes\6.4.1\usr\bin;" + $env:Path
+$env:SDKROOT = "$swift\Platforms\6.4.1\Windows.platform\Developer\SDKs\Windows.sdk"
+
+swift build
+swift test
+swift run bmscore-check
+```
+
+Ngoài ra cần **Visual Studio Build Tools 2022** (workload *Desktop development
+with C++*) để có `link.exe`, `lib.exe` và Windows SDK. Nếu driver báo
+`could not find CLI tool 'link'`, chạy lệnh từ *x64 Native Tools Command Prompt*
+hoặc copy `link.exe`/`lib.exe` vào `…\Swift\Toolchains\<ver>\usr\bin`.
+
 - **Sinh lại golden vectors** (sau khi sửa parser Python gốc):
   ```
   python tools/gen_golden_vectors.py
