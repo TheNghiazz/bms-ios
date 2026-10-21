@@ -1,7 +1,7 @@
-﻿// DashboardView.swift
-// SVG v1: khung dashboard tá»‘i giáº£n nhÆ°ng Ä‘á»§ dÃ¹ng â€” hiá»‡n sá»‘ liá»‡u live/demo,
-// banner ETA, SOC gauge, grid cell, thÃ´ng tin thiáº¿t bá»‹. Phase 5 sáº½ nÃ¢ng cáº¥p
-// chi tiáº¿t (metric cards xá»‹n nhÆ° báº£n Tkinter).
+// DashboardView.swift
+// SVG v1: khung dashboard tối giản nhưng đủ dùng — hiện số liệu live/demo,
+// banner ETA, SOC gauge, grid cell, thông tin thiết bị. Phase 5 sẽ nâng cấp
+// chi tiết (metric cards xịn như bản Tkinter).
 
 import BMSCore
 import SwiftUI
@@ -17,7 +17,7 @@ struct DashboardView: View {
 
     @ViewBuilder
     private var content: some View {
-        // revision Ä‘á»c Ä‘á»ƒ view biáº¿t render láº¡i khi parser Ä‘á»•i
+        // revision đọc để view biết render lại khi parser đổi
         let _ = store.revision
         let live = store.live
         let eta = store.eta
@@ -32,11 +32,11 @@ struct DashboardView: View {
                 cellsGrid(live: live)
                 deviceInfoCard
                 if let error = store.session.lastError {
-                    Text("âš ï¸ \(error)")
+                    Text("⚠️ \(error)")
                         .font(.footnote)
                         .foregroundStyle(Color.bmsRose)
                 }
-                Text("Â· Dá»¯ liá»‡u demo náº¿u chÆ°a káº¿t ná»‘i BLE tháº­t")
+                Text("· Dữ liệu demo nếu chưa kết nối BLE thật")
                     .font(.caption2)
                     .foregroundStyle(Color.bmsMuted)
             }
@@ -54,7 +54,7 @@ struct DashboardView: View {
                 Text(store.session.status)
                     .font(.footnote)
                     .foregroundStyle(Color.bmsText)
-                Text(store.isLive ? "BLE trá»±c tiáº¿p" : "Cháº¿ Ä‘á»™ demo")
+                Text(store.isLive ? "BLE trực tiếp" : "Chế độ demo")
                     .font(.caption2)
                     .foregroundStyle(Color.bmsMuted)
             }
@@ -75,7 +75,7 @@ struct DashboardView: View {
 
     private func infoStrip(live: BMSLiveTelemetry) -> some View {
         HStack {
-            Text("Máº¡ch: \(store.parser.bmsBrand) (\(live.protocolVersion))")
+            Text("Mạch: \(store.parser.bmsBrand) (\(live.protocolVersion))")
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(Color.bmsGreen)
             Spacer()
@@ -91,7 +91,7 @@ struct DashboardView: View {
 
     private func etaBanner(live: BMSLiveTelemetry, eta: BMSEtaResult) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("â± Dá»° TÃNH Sáº C Äáº¦Y / Xáº¢ Cáº N")
+            Text("⏱ DỰ TÍNH SẠC ĐẦY / XẢ CẠN")
                 .font(.caption.weight(.bold))
                 .foregroundStyle(Color.bmsMuted)
             Text(etaTitle(eta: eta, live: live))
@@ -118,8 +118,8 @@ struct DashboardView: View {
                             format: "%.1f / %.1f Ah",
                             live.remainingCapacityAh,
                             live.nominalCapacityAh))
-            Text(live.chargingMosOn ? "MOS Sáº C: Báº¬T"
-                    : (live.dischargingMosOn ? "MOS Xáº¢: Báº¬T" : "STANDBY"))
+            Text(live.chargingMosOn ? "MOS SẠC: BẬT"
+                    : (live.dischargingMosOn ? "MOS XẢ: BẬT" : "STANDBY"))
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(live.chargingMosOn ? Color.bmsGreen
                                     : (live.dischargingMosOn ? Color.bmsGreen
@@ -133,10 +133,10 @@ struct DashboardView: View {
 
     private func metricsGrid(live: BMSLiveTelemetry) -> some View {
         let items: [(String, String, Color)] = [
-            ("Tá»•ng Ã¡p", String(format: "%.3f V", live.totalVoltageV), .bmsText),
-            ("DÃ²ng", String(format: "%+.2f A", live.currentA), .bmsAmber),
-            ("CÃ´ng suáº¥t", String(format: "%+.1f W", live.powerW), .bmsBlue),
-            ("Lá»‡ch Ã¡p",
+            ("Tổng áp", String(format: "%.3f V", live.totalVoltageV), .bmsText),
+            ("Dòng", String(format: "%+.2f A", live.currentA), .bmsAmber),
+            ("Công suất", String(format: "%+.1f W", live.powerW), .bmsBlue),
+            ("Lệch áp",
              String(format: "%.0f mV", live.deltaCellVoltageV * 1000), .bmsGreen),
             ("Cell MAX", String(format: "#%02d: %.3f V",
                                 live.maxVoltageCellNum,
@@ -166,7 +166,7 @@ struct DashboardView: View {
 
     private func cellsGrid(live: BMSLiveTelemetry) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("ÄIá»†N ÃP Tá»ªNG CELL")
+            Text("ĐIỆN ÁP TỪNG CELL")
                 .font(.caption.weight(.bold))
                 .foregroundStyle(Color.bmsMuted)
             LazyVGrid(columns: adaptiveColumns, spacing: 6) {
@@ -197,17 +197,17 @@ struct DashboardView: View {
 
     private var deviceInfoCard: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("THÃ”NG TIN THIáº¾T Bá»Š & Máº¬T KHáº¨U")
+            Text("THÔNG TIN THIẾT BỊ & MẬT KHẨU")
                 .font(.caption.weight(.bold))
                 .foregroundStyle(Color.bmsMuted)
-            infoRow("TÃªn", store.deviceInfo.deviceName)
+            infoRow("Tên", store.deviceInfo.deviceName)
             infoRow("Model", store.deviceInfo.vendorId)
             infoRow("PIN BLE", store.deviceInfo.devicePasscode)
-            infoRow("MK cÃ i Ä‘áº·t", store.deviceInfo.setupPasscode)
+            infoRow("MK cài đặt", store.deviceInfo.setupPasscode)
             infoRow("Serial", store.deviceInfo.serialNumber)
-            infoRow("PhiÃªn báº£n",
-                    "HW \(store.deviceInfo.hardwareVersion) Â· SW \(store.deviceInfo.softwareVersion)")
-            Text("Cháº¡y: "
+            infoRow("Phiên bản",
+                    "HW \(store.deviceInfo.hardwareVersion) · SW \(store.deviceInfo.softwareVersion)")
+            Text("Chạy: "
                 + BMSFormatting.formatDuration(seconds: store.deviceInfo.uptimeSeconds))
                 .font(.footnote)
                 .foregroundStyle(Color.bmsMuted)
@@ -234,14 +234,14 @@ struct DashboardView: View {
     private func etaTitle(eta: BMSEtaResult, live: BMSLiveTelemetry) -> String {
         switch eta.state {
         case .charging:
-            if eta.etaHours == nil { return "Pin Ä‘Ã£ sáº¡c Ä‘áº§y (100%)" }
-            return "Dá»± kiáº¿n sáº¡c Ä‘áº§y sau: ~"
+            if eta.etaHours == nil { return "Pin đã sạc đầy (100%)" }
+            return "Dự kiến sạc đầy sau: ~"
                 + BMSFormatting.formatEtaHours(eta.etaHours ?? 0)
         case .discharging:
-            return "Dá»± kiáº¿n xáº£ cáº¡n sau: ~"
+            return "Dự kiến xả cạn sau: ~"
                 + BMSFormatting.formatEtaHours(eta.etaHours ?? 0)
         case .standby:
-            return "Tráº¡ng thÃ¡i Chá» (KhÃ´ng sáº¡c / KhÃ´ng xáº£)"
+            return "Trạng thái Chờ (Không sạc / Không xả)"
         }
     }
 
@@ -249,25 +249,25 @@ struct DashboardView: View {
         switch eta.state {
         case .charging:
             if eta.etaHours == nil {
-                return String(format: "Äang duy trÃ¬ dÃ²ng sáº¡c: +%.2f A", live.currentA)
+                return String(format: "Đang duy trì dòng sạc: +%.2f A", live.currentA)
             }
-            return String(format: "Äang náº¡p +%.2f A â€¢ cáº§n %.1f/%.1f Ah",
+            return String(format: "Đang nạp +%.2f A • cần %.1f/%.1f Ah",
                           live.currentA, live.remainingCapacityAh,
                           live.nominalCapacityAh)
         case .discharging:
-            return String(format: "Äang xáº£ %.2f A â€¢ cÃ²n %.1f Ah",
+            return String(format: "Đang xả %.2f A • còn %.1f Ah",
                           live.currentA, live.remainingCapacityAh)
         case .standby:
             let hours = eta.needAh > 0
                 ? BMSFormatting.formatEtaHours((eta.needAh / 5.0) * 1.08)
-                : "0 phÃºt"
-            return "Cáº§n náº¡p " + String(format: "%.2f Ah (%.0f Wh)", eta.needAh, eta.needWh)
-                + " Â· náº¿u sáº¡c 5A ~" + hours
+                : "0 phút"
+            return "Cần nạp " + String(format: "%.2f Ah (%.0f Wh)", eta.needAh, eta.needWh)
+                + " · nếu sạc 5A ~" + hours
         }
     }
 }
 
-/// VÃ²ng cung SOC Ä‘áº·t á»Ÿ giá»¯a.
+/// Vòng cung SOC đặt ở giữa.
 struct SOCIndicator: View {
     let percent: Int
     let subtitle: String
@@ -279,9 +279,9 @@ struct SOCIndicator: View {
     var body: some View {
         ZStack {
             Circle()
-                .trim(from: 0.0, to: 0.667)               // cung 240Â°
+                .trim(from: 0.0, to: 0.667)               // cung 240°
                 .stroke(Color.bmsBorder, style: StrokeStyle(lineWidth: 14, lineCap: .round))
-                .rotationEffect(.degrees(150))             // báº¯t Ä‘áº§u 150Â° = canvas "start=-30"
+                .rotationEffect(.degrees(150))             // bắt đầu 150° = canvas "start=-30"
             Circle()
                 .trim(from: 0.0, to: 0.667 * Double(max(0, min(100, percent))) / 100.0)
                 .stroke(accent, style: StrokeStyle(lineWidth: 14, lineCap: .round))
