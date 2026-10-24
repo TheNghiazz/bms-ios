@@ -180,7 +180,26 @@ Chỉ đọc cmd `0x90`: total V (u16 BE, 0.1) @4–5, current = `((d8<<8|d9)-30
 (david offset 30000 tương đương 0 A), SOC = `((d10<<8|d11))*0.1`.
 Điện áp từng cell Daly CHƯA được giải mã (known limitation — Phase 8 mở rộng).
 
-## 6. Nhịp lệnh & kết nối (đã siết so với GUI gốc)
+## 6. Lọc thiết bị khi quét (`BMSScanFilter`)
+
+Giống app của hãng, app không hiện mọi thiết bị Bluetooth. Mỗi gói quảng cáo
+được chấm điểm từ tên + service UUID:
+
+| Ưu tiên | Dấu hiệu | Hãng | Điểm |
+|---|---|---|---|
+| 1 | Tên khớp `JK` / `JBD` / `Xiaoxiang` / `Daly` / `ANT`… | đúng hãng | 100 |
+| 2 | Tên chứa `bms`, `lifepo4`, `battery monitor`, `sp04s`… | có thể (theo service) | 80 |
+| 3 | Service `FF00` (JBD) / `FFF0` (Daly) / `FFF1` | đúng hãng | 90 |
+| 4 | Service `FFE0` | JK/ANT (gợi ý) | 70 |
+| 5 | Không có dấu hiệu nào | ẩn | — |
+
+- Quét bằng `scanForPeripherals(withServices: nil)` để không bỏ sót mạch không
+  quảng cáo service, rồi lọc bằng phần mềm.
+- Tên hiển thị lấy từ `CBAdvertisementDataLocalNameKey` hoặc `CBPeripheral.name`.
+- Kết quả khớp được giữ lại kể cả khi gói quảng cáo sau thiếu tên/service.
+- Công tắc **“Hiện tất cả thiết bị Bluetooth”** tắt bộ lọc mà không cần quét lại.
+
+## 7. Nhịp lệnh & kết nối (đã siết so với GUI gốc)
 
 1. Quét 8 s → chọn thiết bị (khóa là `CBPeripheral.identifier`, không phải MAC).
 2. Kết nối (timeout 12 s) → khám phá toàn bộ service/characteristic.
@@ -206,7 +225,7 @@ Chỉ dữ liệu của đúng characteristic đã chọn được đẩy vào p
 `FFE2`, Battery Level `2A19` hay Device Name `2A00` không thể làm hỏng buffer.
 
 
-## 7. Bug đã biết của chính file gốc (được khắc phục trong Swift)
+## 8. Bug đã biết của chính file gốc (được khắc phục trong Swift)
 
 | # | Vị trí | Bug | Cách xử lý trong port |
 |---|---|---|---|
@@ -223,7 +242,7 @@ Chỉ dữ liệu của đúng characteristic đã chọn được đẩy vào p
 | 11 | UI | Giá trị mặc định của decoder hiện như dữ liệu thật | `BMSDeviceInfoProvenance` + trạng thái chờ dữ liệu thật |
 
 
-## 8. Golden vectors hiện có (9 case)
+## 9. Golden vectors hiện có (9 case)
 
 | Case | Ý nghĩa |
 |---|---|

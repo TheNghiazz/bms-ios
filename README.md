@@ -17,6 +17,7 @@ bms-ios/
 ├─ Package.swift                  BMSCore (thuần Swift, test được Everywhere)
 ├─ Sources/BMSCore/               parser + 4 decoder + golden check
 │  ├─ Acquisition.swift           chọn kênh BLE tất định (FFE1/FF01/FFF1…)
+│  ├─ Discovery.swift             lọc thiết bị quét (chỉ mạch BMS)
 │  └─ Resources/golden_vectors.json
 ├─ Sources/BMSCoreCheck/main.swift  chạy check kiểu executable (swift run)
 ├─ Tests/BMSCoreTests/            XCTest
@@ -122,6 +123,32 @@ timeout 12 s và tự dọn state khi ngắt.
 > Logic đã có unit test và golden vectors; vẫn cần xác nhận lại trên mạch JK
 > thật (Phase 8) — xem mục **Chẩn đoán** trong app để biết kênh đã chọn.
 
+## Chỉ hiện mạch BMS khi quét (giống app của hãng)
+
+App của JK/JBD/Daly thường không liệt kê mọi thiết bị Bluetooth quanh đó. Họ
+lọc ngay từ gói quảng cáo theo một trong các dấu hiệu:
+
+- **tên thiết bị** (tiền tố/thương hiệu: `JK`, `JBD`, `Xiaoxiang`, `Daly`, `ANT`…),
+- **service UUID 16-bit đặc trưng** được quảng cáo (`FFE0` cho JK/ANT,
+  `FF00` cho JBD, `FFF0` cho Daly),
+- **company/manufacturer ID** trong gói quảng cáo,
+- gọi `scanForPeripherals(withServices:)` để iOS lọc hộ.
+
+iOS không cho đọc MAC và nhiều mạch không quảng cáo service UUID, nên app này
+quét tất cả rồi lọc bằng phần mềm trong `BMSScanFilter`:
+
+1. tên khớp hãng đã biết → chắc chắn (điểm 100);
+2. tên chứa từ khóa `bms`, `lifepo4`, `battery monitor`… → điểm 80;
+3. service `FF00`/`FFF0` → đúng hãng (điểm 90);
+4. service `FFE0` → "có thể là JK/ANT" (điểm 70, vì nhiều module BLE giá rẻ
+   cũng dùng service này);
+5. còn lại → ẩn khỏi danh sách.
+
+Màn hình **Quét & kết nối** có công tắc **“Hiện tất cả thiết bị Bluetooth”**
+cho trường hợp mạch đã được đổi tên lạ, kèm số thiết bị đã ẩn và lý do từng
+thiết bị được nhận là BMS.
+
+
 
 ## Màn hình dữ liệu
 
@@ -148,6 +175,7 @@ tra toàn bộ dữ liệu HIỂN THỊ trước khi cắm mạch thật.
 - [x] Phase 3 — parser Swift + tests (chạy trên CI hoặc `swift test` local)
 - [x] Phase 4 — BLESession (quét/kết nối/heartbeat; test với mạch thật tại Phase 8)
 - [x] Phase 5 — UI dữ liệu tối giản: mạch + thiết bị + mật khẩu (animation smooth)
+- [x] Lọc quét: chỉ hiện mạch BMS (tên hãng + service UUID), có công tắc hiện tất cả
 - [x] App icon (`App/Assets.xcassets`) + bundle ID `vn.ngia.bmsreader`
 - [ ] Phase 6 — nhớ thiết bị (UUID), settings
 - [ ] Phase 7 — ổn định iOS (quyền, lỗi, background)

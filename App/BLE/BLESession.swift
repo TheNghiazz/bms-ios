@@ -23,8 +23,17 @@ struct ScannedDevice: Identifiable, Hashable {
     let id: UUID
     var name: String
     var rssi: Int
+    /// Hãng đoán được từ tên/service quảng cáo (nil = "có thể là BMS").
+    var brand: BMSBrand?
+    /// Vì sao app coi đây là mạch BMS (hiển thị ở màn hình quét).
+    var reason: String
 
     var title: String { "\(name) · \(rssi) dBm" }
+
+    var subtitle: String {
+        let brandText = brand?.rawValue ?? "Chưa rõ hãng"
+        return "\(brandText) · \(rssi) dBm · \(reason)"
+    }
 }
 
 final class BLESession: NSObject, ObservableObject,
@@ -38,6 +47,10 @@ final class BLESession: NSObject, ObservableObject,
     /// true khi đã nhận được ít nhất một khung BMS hợp lệ.
     @Published private(set) var isStreaming = false
     @Published private(set) var devices: [ScannedDevice] = []
+    /// Số thiết bị Bluetooth bị ẩn vì không có dấu hiệu là mạch BMS.
+    @Published private(set) var hiddenDeviceCount = 0
+    /// false (mặc định) = chỉ hiện mạch BMS; true = hiện mọi thiết bị BLE.
+    @Published private(set) var showAllDevices = false
     @Published var lastError: String?
     @Published private(set) var connectedDeviceName = ""
 
@@ -102,6 +115,20 @@ final class BLESession: NSObject, ObservableObject,
     private var connectTimer: Timer?
     private var known: [UUID: CBPeripheral] = [:]
     private var advertisedNames: [UUID: String] = [:]
+
+    /// Thông tin một thiết bị đã thấy khi quét. Giữ lại cả thiết bị không phải
+    /// BMS để có thể hiện khi người dùng bật "Hiện tất cả" mà không cần quét lại.
+    private struct DiscoveryRecord {
+        var name: String
+        var rssi: Int
+        var brand: BMSBrand?
+        var reason: String
+        var isBMS: Bool
+    }
+    private var discovered: [UUID: DiscoveryRecord] = [:]
+    /// Giữ thứ tự xuất hiện để danh sách không nhảy lên/xuống mỗi gói quảng cáo.
+    private var discoveryOrder: [UUID] = []
+
     private var advertisedName = ""
     private var brandHint: BMSBrand?
 
@@ -172,24 +199,64 @@ final class BLESession: NSObject, ObservableObject,
         wantsScan = false
         known.removeAll(keepingCapacity: true)
         advertisedNames.removeAll(keepingCapacity: true)
+        discovered.removeAll(keepingCapacity: true)
+        discoveryOrder.removeAll(keepingCapacity: true)
         devices.removeAll()
+        hiddenDeviceCount = 0
         central.scanForPeripherals(
             withServices: nil,
             options: [CBCentralManagerScanOptionAllowDuplicatesKey: true])
         isScanning = true
         phase = .scanning
-        status = "Đang quét Bluetooth BLE (8 giây)..."
+        status = "Đang quét mạch BMS (8 giây)..."
         scanTimer = after(8.0) { [weak self] in
             guard let self, self.scanToken == token else { return }
             self.central?.stopScan()
             self.isScanning = false
             if self.devices.isEmpty {
-                self.status = "Không tìm thấy thiết bị Bluetooth nào"
+                self.status = self.hiddenDeviceCount > 0
+                    ? "Không thấy mạch BMS — đã ẩn \(self.hiddenDeviceCount) thiết bị khác"
+                    : "Không tìm thấy thiết bị Bluetooth nào"
             } else {
-                self.status = "Tìm thấy \(self.devices.count) thiết bị"
+                self.status = "Tìm thấy \(self.devices.count) mạch BMS"
+                if self.hiddenDeviceCount > 0 {
+                    self.status += " (ẩn \(self.hiddenDeviceCount) thiết bị khác)"
+                }
             }
             if self.phase == .scanning { self.phase = .idle }
         }
+    }
+
+    /// Bật/tắt bộ lọc "chỉ mạch BMS". Không cần quét lại: danh sách được dựng
+    /// lại từ các gói quảng cáo đã nhận.
+    func setShowAllDevices(_ value: Bool) {
+        guard showAllDevices != value else { return }
+        showAllDevices = value
+        refreshDeviceList()
+        status = value
+            ? "Đang hiện tất cả thiết bị Bluetooth (\(devices.count))"
+            : "Chỉ hiện mạch BMS (\(devices.count))"
+    }
+
+    /// Dựng lại `devices` theo bộ lọc hiện tại, đồng thời cập nhật số bị ẩn.
+    private func refreshDeviceList() {
+        var list: [ScannedDevice] = []
+        var hidden = 0
+        for id in discoveryOrder {
+            guard let record = discovered[id] else { continue }
+            if record.isBMS || showAllDevices {
+                list.append(ScannedDevice(
+                    id: id,
+                    name: record.name,
+                    rssi: record.rssi,
+                    brand: record.brand,
+                    reason: record.reason))
+            } else {
+                hidden += 1
+            }
+        }
+        devices = list
+        hiddenDeviceCount = hidden
     }
 
     // -------------------------------------------------------------- connect
@@ -210,7 +277,8 @@ final class BLESession: NSObject, ObservableObject,
             ?? "(Không tên)"
         connectedDeviceName = display
         advertisedName = advertisedNames[deviceID] ?? display
-        brandHint = BMSBrand.detect(fromDeviceName: advertisedName)
+        brandHint = discovered[deviceID]?.brand
+            ?? BMSBrand.detect(fromDeviceName: advertisedName)
             ?? BMSBrand.detect(fromDeviceName: display)
 
         if let current = peripheral, current.state != .disconnected {
@@ -316,22 +384,45 @@ final class BLESession: NSObject, ObservableObject,
                         advertisementData: [String: Any],
                         rssi RSSI: NSNumber) {
         let advName = advertisementData[CBAdvertisementDataLocalNameKey] as? String
-        let name = nonEmptyName(advName)
-            ?? nonEmptyName(peripheral.name)
-            ?? "(Không tên)"
+        let rawName = nonEmptyName(advName) ?? nonEmptyName(peripheral.name)
+        let name = rawName ?? "(Không tên)"
 
         known[peripheral.identifier] = peripheral
         if let advName, !advName.isEmpty {
             advertisedNames[peripheral.identifier] = advName
         }
 
-        if let index = devices.firstIndex(where: { $0.id == peripheral.identifier }) {
-            devices[index].rssi = RSSI.intValue
-            if name != "(Không tên)" { devices[index].name = name }
+        // Chỉ lấy service UUID từ gói quảng cáo (không phải GATT đầy đủ) để
+        // lọc đúng kiểu app của hãng: FF00 = JBD, FFF0 = Daly, FFE0 = JK/ANT.
+        let advServices = (advertisementData[CBAdvertisementDataServiceUUIDsKey]
+            as? [CBUUID] ?? []).map { BLEEndpointSelector.shortUUID($0.uuidString) }
+        let match = BMSScanFilter.match(name: rawName, serviceUUIDs: advServices)
+
+        let id = peripheral.identifier
+        if var record = discovered[id] {
+            record.rssi = RSSI.intValue
+            if name != "(Không tên)" { record.name = name }
+            // Gói quảng cáo có thể thiếu tên/service ở lần sau; giữ kết quả
+            // khớp mạnh nhất đã thấy thay vì làm thiết bị "biến mất".
+            if let match, (!record.isBMS || match.score >= 90) {
+                record.isBMS = true
+                record.brand = match.brand ?? record.brand
+                record.reason = match.reason
+            }
+            discovered[id] = record
         } else {
-            devices.append(ScannedDevice(
-                id: peripheral.identifier, name: name, rssi: RSSI.intValue))
+            discoveryOrder.append(id)
+            discovered[id] = DiscoveryRecord(
+                name: name,
+                rssi: RSSI.intValue,
+                brand: match?.brand,
+                reason: match?.reason ?? "Không có dấu hiệu mạch BMS",
+                isBMS: match != nil)
+            if match == nil, !showAllDevices, hiddenDeviceCount == 0 {
+                appendDiagnostic("Đã ẩn thiết bị không phải BMS: \(name)")
+            }
         }
+        refreshDeviceList()
     }
 
     func centralManager(_ central: CBCentralManager,

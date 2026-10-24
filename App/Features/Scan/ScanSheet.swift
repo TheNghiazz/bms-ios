@@ -1,5 +1,6 @@
 // ScanSheet.swift
-// Danh sách thiết bị BLE tìm thấy trong vòng quét 8 giây.
+// Danh sách mạch BMS tìm thấy trong vòng quét 8 giây (đã lọc theo tên hãng
+// và service UUID quảng cáo; có công tắc hiện tất cả thiết bị BLE).
 // iOS không cho thấy MAC; UUID nội bộ của CBPeripheral là khóa kết nối.
 // Màn hình này cũng là nơi xem chẩn đoán: đã chọn kênh nào, nhận bao nhiêu
 // byte, bao nhiêu khung hợp lệ.
@@ -27,13 +28,44 @@ struct ScanSheet: View {
                         .font(.footnote.weight(.semibold))
                     }
                 }
+
+                Toggle(isOn: Binding(
+                    get: { store.session.showAllDevices },
+                    set: { store.session.setShowAllDevices($0) }
+                )) {
+                    Label("Hiện tất cả thiết bị Bluetooth", systemImage: "antenna.radiowaves.left.and.right")
+                        .font(.footnote)
+                }
+
+                if !store.session.showAllDevices, store.session.hiddenDeviceCount > 0 {
+                    HStack {
+                        Text("Đã ẩn \(store.session.hiddenDeviceCount) thiết bị không phải mạch BMS")
+                            .font(.caption2)
+                            .foregroundStyle(Color.bmsMuted)
+                        Spacer()
+                        Button("Hiện") {
+                            store.session.setShowAllDevices(true)
+                        }
+                        .font(.caption2.weight(.semibold))
+                    }
+                }
             }
 
-            Section("Thiết bị tìm thấy") {
+            Section("Mạch BMS tìm thấy") {
                 if store.session.devices.isEmpty {
-                    Text("Chưa có thiết bị nào")
-                        .font(.footnote)
-                        .foregroundStyle(Color.bmsMuted)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(store.session.isScanning
+                             ? "Đang tìm mạch BMS…"
+                             : "Chưa thấy mạch BMS nào")
+                            .font(.footnote)
+                            .foregroundStyle(Color.bmsMuted)
+                        if !store.session.isScanning {
+                            Text("Mạch có thể đã được đổi tên lạ — bật "
+                                 + "“Hiện tất cả thiết bị Bluetooth” để xem toàn bộ.")
+                                .font(.caption2)
+                                .foregroundStyle(Color.bmsMuted)
+                        }
+                    }
                 } else {
                     ForEach(store.session.devices) { device in
                         Button {
@@ -41,8 +73,17 @@ struct ScanSheet: View {
                             onConnected()
                         } label: {
                             HStack(spacing: 10) {
-                                Label(device.title, systemImage: "circuitboard")
-                                    .font(.footnote)
+                                Image(systemName: "circuitboard")
+                                    .foregroundStyle(Color.bmsGreen)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(device.name)
+                                        .font(.footnote.weight(.semibold))
+                                        .lineLimit(1)
+                                    Text(device.subtitle)
+                                        .font(.caption2)
+                                        .foregroundStyle(Color.bmsMuted)
+                                        .lineLimit(2)
+                                }
                                 Spacer()
                                 if store.session.isConnected,
                                    store.session.connectedDeviceName == device.name {
