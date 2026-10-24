@@ -1,11 +1,11 @@
 // DeviceInfoView.swift
-// Màn hình chính: chỉ tập trung vào DỮ LIỆU LẤY TỪ MẠCH — hãng/mạch BMS,
-// thông tin thiết bị và mật khẩu. Không hiển thị dung lượng pin, điện áp,
-// dòng điện hay % pin.
+// Trạng thái "đã kết nối": header gọn của thiết bị + nút Ngắt, sau đó là
+// danh sách thông tin đọc trực tiếp từ mạch. Không còn dữ liệu mẫu.
 //
-// Chuyển động: card hiện lần lượt khi mở app, quầng sáng nền trôi chậm,
-// chấm trạng thái nhấp nháy, giá trị đổi mượt (contentTransition) và hiện/ẩn
-// mật khẩu có animation. Tất cả tự tắt khi bật "Reduce Motion".
+// Chuyển động: khi vừa kết nối, header và từng card lần lượt "bung" ra từ
+// phía nút kết nối (burstOut, so le theo index), quầng sáng nền trôi chậm,
+// chấm trạng thái nhấp nháy, giá trị đổi mượt và hiện/ẩn mật khẩu có animation.
+// Tất cả tự tắt khi bật "Giảm chuyển động".
 
 import BMSCore
 import SwiftUI
@@ -13,7 +13,7 @@ import UIKit
 
 struct DeviceInfoView: View {
     @ObservedObject var store: BMSStore
-    var onConnect: () -> Void
+    var onDisconnect: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var appeared = false
@@ -24,94 +24,77 @@ struct DeviceInfoView: View {
 
         ScrollView {
             VStack(spacing: 18) {
-                hero(live: live)
-                    .reveal(appeared, delay: 0, reduceMotion: reduceMotion)
+                header(live: live)
+                    .burstOut(appeared, index: 0, reduceMotion: reduceMotion)
+
+                if !store.session.isStreaming {
+                    waitingCard
+                        .burstOut(appeared, index: 1, reduceMotion: reduceMotion)
+                }
 
                 section("Mạch BMS",
                         icon: "cpu",
-                        showRefresh: store.isLive) {
+                        showRefresh: store.session.readMode == .polling) {
                     group(boardRows(live: live))
                 }
-                .reveal(appeared, delay: 0.06, reduceMotion: reduceMotion)
-
-                if store.isLive && !store.session.isStreaming {
-                    waitingCard
-                        .reveal(appeared, delay: 0.09, reduceMotion: reduceMotion)
-                }
+                .burstOut(appeared, index: 2, reduceMotion: reduceMotion)
 
                 section("Thông tin thiết bị", icon: "memorychip") {
                     group(deviceRows)
                 }
-                .reveal(appeared, delay: 0.12, reduceMotion: reduceMotion)
+                .burstOut(appeared, index: 3, reduceMotion: reduceMotion)
 
                 section("Mật khẩu", icon: "key.fill") {
                     group(passwordRows)
                 }
-                .reveal(appeared, delay: 0.18, reduceMotion: reduceMotion)
+                .burstOut(appeared, index: 4, reduceMotion: reduceMotion)
 
                 Text("Chạm biểu tượng để sao chép, nhấn 👁 để hiện mật khẩu.")
                     .font(.caption2)
                     .foregroundStyle(Color.bmsMuted)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 4)
-                    .reveal(appeared, delay: 0.22, reduceMotion: reduceMotion)
+                    .burstOut(appeared, index: 5, reduceMotion: reduceMotion)
 
                 if !live.errorMessages.isEmpty {
                     warnings(live.errorMessages)
-                        .reveal(appeared, delay: 0.24, reduceMotion: reduceMotion)
+                        .burstOut(appeared, index: 6, reduceMotion: reduceMotion)
                 }
 
                 if let error = store.session.lastError {
                     errorCard(error)
-                        .reveal(appeared, delay: 0.26, reduceMotion: reduceMotion)
+                        .burstOut(appeared, index: 7, reduceMotion: reduceMotion)
                 }
 
                 footer
-                    .reveal(appeared, delay: 0.28, reduceMotion: reduceMotion)
+                    .burstOut(appeared, index: 8, reduceMotion: reduceMotion)
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
             .padding(.bottom, 40)
         }
         .scrollIndicators(.hidden)
-        .background(backdrop)
+        .background(BMSBackdrop())
         .preferredColorScheme(.dark)
         .tint(Color.bmsGreen)
         .animation(.snappy(duration: 0.3), value: store.session.lastError)
         .animation(.snappy(duration: 0.3), value: live.errorMessages)
         .onAppear {
             guard !appeared else { return }
-            if reduceMotion {
-                appeared = true
-            } else {
-                withAnimation(.snappy(duration: 0.5)) { appeared = true }
-            }
+            appeared = true
         }
     }
 
-    // --------------------------------------------------------------- hero
-    private func hero(live: BMSLiveTelemetry) -> some View {
+    // -------------------------------------------------------------- header
+    private func header(live: BMSLiveTelemetry) -> some View {
         let session = store.session
-        let statusColor: Color
-        let statusLabel: String
-
-        if session.isStreaming {
-            statusColor = .bmsGreen
-            statusLabel = "BLE TRỰC TIẾP"
-        } else if session.isConnected {
-            statusColor = .bmsAmber
-            statusLabel = "ĐÃ KẾT NỐI · CHỜ DỮ LIỆU"
-        } else if store.isDemo {
-            statusColor = .bmsAmber
-            statusLabel = "CHẾ ĐỘ DEMO"
-        } else {
-            statusColor = .bmsRose
-            statusLabel = "CHƯA CÓ KẾT NỐI"
-        }
-
-        let statusText = store.isDemo
-            ? "Dữ liệu mẫu — chưa kết nối mạch"
-            : session.status
+        let statusColor: Color = session.isStreaming ? .bmsGreen : .bmsAmber
+        let statusLabel = session.isStreaming
+            ? "BLE TRỰC TIẾP"
+            : session.phase.rawValue.uppercased()
+        let name = session.connectedDeviceName.isEmpty
+            ? store.parser.bmsBrand
+            : session.connectedDeviceName
 
         return VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 8) {
@@ -122,23 +105,33 @@ struct DeviceInfoView: View {
                     .tracking(1.6)
                     .foregroundStyle(statusColor)
                 Spacer()
-                connectButton(statusColor: statusColor)
+                Button(action: onDisconnect) {
+                    Label("Ngắt", systemImage: "xmark")
+                        .font(.system(size: 12, weight: .semibold))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .foregroundStyle(Color.bmsRose)
+                        .background(Capsule().fill(Color.bmsRose.opacity(0.14)))
+                        .overlay(Capsule().strokeBorder(Color.bmsRose.opacity(0.35),
+                                                        lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Ngắt kết nối BLE")
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(store.parser.bmsBrand)
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                Text(name)
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundStyle(Color.bmsText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
                     .contentTransition(.opacity)
-                Text(statusText)
+                Text(session.status)
                     .font(.footnote)
                     .foregroundStyle(Color.bmsMuted)
                     .lineLimit(2)
                     .contentTransition(.opacity)
             }
-            .animation(.snappy(duration: 0.3), value: store.parser.bmsBrand)
             .animation(.snappy(duration: 0.3), value: session.status)
 
             HStack(spacing: 8) {
@@ -150,7 +143,7 @@ struct DeviceInfoView: View {
                              text: "\(live.activeCellCount)S",
                              tint: .bmsGreen)
                 }
-                if store.isLive {
+                if session.readMode != .none {
                     HeroChip(icon: "waveform.path.ecg",
                              text: session.readMode.rawValue,
                              tint: .bmsMuted)
@@ -190,31 +183,7 @@ struct DeviceInfoView: View {
                 )
         }
         .shadow(color: statusColor.opacity(0.18), radius: 22, y: 10)
-        .animation(.snappy(duration: 0.35), value: store.isLive)
         .animation(.snappy(duration: 0.35), value: session.isStreaming)
-    }
-
-    private func connectButton(statusColor: Color) -> some View {
-        let connected = store.session.isConnected
-        let label = connected ? "Ngắt" : (store.isDemo ? "Kết nối" : "Kết nối lại")
-        return Button {
-            if connected {
-                store.toggleLiveConnection()
-            } else {
-                onConnect()
-            }
-        } label: {
-            Label(label,
-                  systemImage: connected ? "xmark" : "antenna.radiowaves.left.and.right")
-                .font(.system(size: 12, weight: .semibold))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .foregroundStyle(statusColor)
-                .background(Capsule().fill(statusColor.opacity(0.14)))
-                .overlay(Capsule().strokeBorder(statusColor.opacity(0.35), lineWidth: 1))
-                .contentTransition(.opacity)
-        }
-        .buttonStyle(.plain)
     }
 
     // ---------------------------------------------------------- waiting card
@@ -223,9 +192,7 @@ struct DeviceInfoView: View {
         let color: Color = session.phase == .failed ? .bmsRose : .bmsAmber
         let message: String
 
-        if !session.isConnected {
-            message = "Chưa kết nối mạch. Mở Quét & kết nối để chọn thiết bị BLE."
-        } else if session.rawPacketCount == 0 {
+        if session.rawPacketCount == 0 {
             message = "Đã kết nối nhưng chưa nhận được byte nào trên "
                 + "\(session.selectedDataUUID.isEmpty ? "kênh dữ liệu" : session.selectedDataUUID)"
                 + ". App đang chờ notify từ mạch."
@@ -241,10 +208,8 @@ struct DeviceInfoView: View {
                 Text(session.phase.rawValue.uppercased())
                     .tracking(1.2)
                 Spacer()
-                if session.isConnected {
-                    Button("Gửi lại lệnh") { session.requestDeviceInfo() }
-                        .font(.caption2.weight(.semibold))
-                }
+                Button("Gửi lại lệnh") { session.requestDeviceInfo() }
+                    .font(.caption2.weight(.semibold))
             }
             .font(.system(size: 11, weight: .bold))
             .foregroundStyle(color)
@@ -353,7 +318,7 @@ struct DeviceInfoView: View {
                     value: live.activeCellCount > 0 ? "\(live.activeCellCount)S" : ""),
             RowSpec(icon: "arrow.left.arrow.right",
                     label: "Cách đọc",
-                    value: store.isLive ? store.session.readMode.rawValue : "Dữ liệu mẫu"),
+                    value: store.session.readMode == .none ? "" : store.session.readMode.rawValue),
         ]
     }
 
@@ -390,22 +355,18 @@ struct DeviceInfoView: View {
         ]
     }
 
-    /// Dữ liệu demo hiển thị đầy đủ (có nhãn DEMO). Với mạch thật, chỉ hiển
-    /// thị trường thực sự có trong khung — không biến giá trị mặc định của
-    /// decoder thành "đọc được từ mạch".
+    /// Chỉ hiển thị trường thực sự có trong khung nhận được — không biến giá
+    /// trị mặc định của decoder thành "đọc được từ mạch".
     private func value(_ raw: String, _ field: BMSDeviceInfoProvenance.Field) -> String {
-        if store.isDemo { return raw }
-        return store.provenance.has(field) ? raw : ""
+        store.provenance.has(field) ? raw : ""
     }
 
     private func versionText(_ info: BMSDeviceInfo) -> String {
         var parts: [String] = []
-        if !info.hardwareVersion.isEmpty,
-           store.isDemo || store.provenance.has(.hardwareVersion) {
+        if !info.hardwareVersion.isEmpty, store.provenance.has(.hardwareVersion) {
             parts.append("HW \(info.hardwareVersion)")
         }
-        if !info.softwareVersion.isEmpty,
-           store.isDemo || store.provenance.has(.softwareVersion) {
+        if !info.softwareVersion.isEmpty, store.provenance.has(.softwareVersion) {
             parts.append("SW \(info.softwareVersion)")
         }
         return parts.joined(separator: " · ")
@@ -413,12 +374,10 @@ struct DeviceInfoView: View {
 
     private func activityText(_ info: BMSDeviceInfo) -> String {
         var parts: [String] = []
-        let showUptime = store.isDemo || store.provenance.has(.uptimeSeconds)
-        let showPowerOn = store.isDemo || store.provenance.has(.powerOnCount)
-        if showUptime, info.uptimeSeconds > 0 {
+        if store.provenance.has(.uptimeSeconds), info.uptimeSeconds > 0 {
             parts.append(BMSFormatting.formatDuration(seconds: info.uptimeSeconds))
         }
-        if showPowerOn, info.powerOnCount > 0 {
+        if store.provenance.has(.powerOnCount), info.powerOnCount > 0 {
             parts.append("bật \(info.powerOnCount) lần")
         }
         return parts.joined(separator: " · ")
@@ -496,31 +455,11 @@ struct DeviceInfoView: View {
 
     private var footerText: String {
         let session = store.session
-        if store.isDemo {
-            return "Đang xem dữ liệu mẫu — kết nối BLE để đọc mạch thật."
-        }
-        if !session.isConnected {
-            return "Chưa kết nối mạch. Dữ liệu bên trên (nếu có) là lần đọc cuối."
-        }
         if !session.isStreaming {
-            return "Đã kết nối nhưng chưa có khung hợp lệ — mở Quét & kết nối để xem chẩn đoán."
+            return "Đã kết nối nhưng chưa có khung hợp lệ — mạch có thể đang "
+                + "khởi động hoặc sai kênh dữ liệu."
         }
         return "Dữ liệu đọc trực tiếp từ mạch qua BLE · kênh \(session.selectedDataUUID)."
-    }
-
-    private var backdrop: some View {
-        ZStack {
-            Color.bmsBg
-            RadialGradient(colors: [Color.bmsGreen.opacity(0.10), .clear],
-                           center: .topTrailing,
-                           startRadius: 0,
-                           endRadius: 460)
-            RadialGradient(colors: [Color.bmsBlue.opacity(0.08), .clear],
-                           center: .bottomLeading,
-                           startRadius: 0,
-                           endRadius: 460)
-        }
-        .ignoresSafeArea()
     }
 }
 
@@ -621,36 +560,7 @@ struct DataRow: View {
     }
 }
 
-// MARK: - Small pieces
-
-struct PulsingDot: View {
-    let color: Color
-    var animated = true
-
-    @State private var pulse = false
-
-    var body: some View {
-        ZStack {
-            if animated {
-                Circle()
-                    .stroke(color.opacity(0.55), lineWidth: 1)
-                    .scaleEffect(pulse ? 2.4 : 1)
-                    .opacity(pulse ? 0 : 1)
-            }
-            Circle()
-                .fill(color)
-                .frame(width: 8, height: 8)
-        }
-        .frame(width: 8, height: 8)
-        .onAppear {
-            guard animated else { return }
-            withAnimation(.easeOut(duration: 1.8).repeatForever(autoreverses: false)) {
-                pulse = true
-            }
-        }
-        .accessibilityHidden(true)
-    }
-}
+// MARK: - Chip nhỏ trong header
 
 struct HeroChip: View {
     let icon: String
@@ -670,52 +580,5 @@ struct HeroChip: View {
         .padding(.vertical, 5)
         .background(Capsule().fill(tint.opacity(0.12)))
         .overlay(Capsule().strokeBorder(tint.opacity(0.25), lineWidth: 1))
-    }
-}
-
-/// Hai quầng sáng trôi chậm phía sau card hero.
-struct AmbientGlow: View {
-    var leading: Color = .bmsGreen
-    var trailing: Color = .bmsBlue
-    var reduceMotion: Bool = false
-
-    @State private var drift = false
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                Circle()
-                    .fill(leading.opacity(0.42))
-                    .frame(width: geo.size.width * 0.70)
-                    .blur(radius: 70)
-                    .offset(x: drift ? geo.size.width * 0.22 : -geo.size.width * 0.18,
-                            y: -geo.size.height * 0.20)
-                Circle()
-                    .fill(trailing.opacity(0.34))
-                    .frame(width: geo.size.width * 0.55)
-                    .blur(radius: 80)
-                    .offset(x: drift ? -geo.size.width * 0.20 : geo.size.width * 0.24,
-                            y: geo.size.height * 0.30)
-            }
-            .animation(reduceMotion ? nil : .easeInOut(duration: 9).repeatForever(autoreverses: true),
-                       value: drift)
-            .onAppear { drift = !reduceMotion }
-        }
-        .allowsHitTesting(false)
-    }
-}
-
-// MARK: - Entrance helper
-
-extension View {
-    /// Fade + trượt nhẹ lên khi card xuất hiện, lệch nhịp theo `delay`.
-    func reveal(_ visible: Bool, delay: Double, reduceMotion: Bool) -> some View {
-        self
-            .opacity(visible ? 1 : 0)
-            .offset(y: visible ? 0 : 16)
-            .animation(reduceMotion
-                       ? nil
-                       : .snappy(duration: 0.55, extraBounce: 0.06).delay(delay),
-                       value: visible)
     }
 }

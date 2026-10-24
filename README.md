@@ -22,11 +22,13 @@ bms-ios/
 ├─ Sources/BMSCoreCheck/main.swift  chạy check kiểu executable (swift run)
 ├─ Tests/BMSCoreTests/            XCTest
 ├─ App/                           SwiftUI app (iOS 17+)
-│  ├─ BMSMonitorApp.swift         @main + RootView
+│  ├─ BMSMonitorApp.swift         @main + RootView (chuyển 2 trạng thái)
 │  ├─ BMSStore.swift              trạng thái chung (parser + session)
 │  ├─ BLE/BLESession.swift        CoreBluetooth: quét/kết nối/heartbeat
+│  ├─ Components/Motion.swift     animation dùng chung (reveal/burstOut…)
+│  ├─ Features/Connect/           màn hình chưa kết nối (nút BLE trung tâm)
 │  ├─ Features/Device/            UI dữ liệu: mạch + thiết bị + mật khẩu
-│  ├─ Features/Scan/ScanSheet.swift  quét/kết nối BLE + dữ liệu mẫu
+│  ├─ Features/Scan/ScanSheet.swift  quét/kết nối BLE + chẩn đoán
 │  └─ Assets.xcassets/            icon app (AppIcon 1024, sinh bởi tools/gen_app_icon.py)
 ├─ tools/gen_golden_vectors.py    sinh golden vectors từ code Python gốc
 ├─ tools/gen_app_icon.py          sinh icon app 1024x1024 (thuần stdlib)
@@ -150,24 +152,32 @@ thiết bị được nhận là BMS.
 
 
 
-## Màn hình dữ liệu
+## Hai trạng thái màn hình chính
 
-- **Hero**: trạng thái BLE (chấm nhấp nháy), hãng mạch, giao thức, số cell,
-  cách đọc (notify/indicate/poll) và nút Kết nối/Ngắt.
+**Chưa kết nối** — không còn dữ liệu mẫu hay card rỗng:
+
+- Nút **Kết nối BLE** ở giữa màn hình, vòng radar lan toả phía sau.
+- Dòng trạng thái BLE (đang quét / đang kết nối / Bluetooth tắt / lỗi) ngay
+  dưới nút; lỗi BLE gần nhất hiển thị dạng banner.
+- Bấm nút mở **Quét & kết nối**.
+
+**Đã kết nối** — header gọn + danh sách thông tin:
+
+- **Header**: chấm trạng thái BLE, tên thiết bị, dòng trạng thái, các chip
+  (giao thức, số cell, cách đọc, tuổi dữ liệu) và nút **Ngắt**.
+- **Chờ dữ liệu**: nếu chưa có khung hợp lệ, card amber/đỏ hiện ngay dưới
+  header với chẩn đoán kênh và số byte nhận được.
 - **Mạch BMS**: hãng, giao thức, cell cấu hình / cell đọc được, cách đọc.
 - **Thông tin thiết bị**: tên, model, serial, ngày sản xuất, phiên bản HW/SW,
   dữ liệu người dùng, thời gian chạy + số lần bật.
 - **Mật khẩu**: PIN BLE, mật khẩu cài đặt, mật khẩu kết nối — ẩn mặc định,
   nhấn 👁 để hiện, nhấn biểu tượng để sao chép (có phản hồi rung).
+- Chỉ hiển thị trường thực sự có trong khung nhận được (dựa trên provenance),
+  trường thiếu để trống thay vì bịa giá trị mặc định.
 - Cảnh báo bit lỗi từ mạch và lỗi BLE hiển thị dạng banner.
-- Chuyển động: card hiện lần lượt khi mở, quầng sáng trôi chậm, giá trị đổi
-  mượt; tự tắt khi bật *Reduce Motion*.
-
-## Chế độ demo trong app
-
-Mở app là dữ liệu mẫu ANT hiển thị sẵn (giống hành vi GUI gốc); trong
-**Quét & kết nối** có thêm mẫu JK 24S, JK 32S, JBD, Daly. Từ đây có thể kiểm
-tra toàn bộ dữ liệu HIỂN THỊ trước khi cắm mạch thật.
+- Chuyển động: khi vừa kết nối, header và từng card lần lượt **bung ra** từ
+  phía nút kết nối (`burstOut`, so le theo index), quầng sáng trôi chậm, giá
+  trị đổi mượt; tự tắt khi bật *Reduce Motion*.
 
 ## Roadmap
 

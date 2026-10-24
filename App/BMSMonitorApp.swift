@@ -1,6 +1,8 @@
 // BMSMonitorApp.swift
-// Điểm vào app. RootView chỉ giữ Store (parser + phiên BLE) và màn hình
-// dữ liệu thiết bị; mở ScanSheet để quét/kết nối hoặc chọn dữ liệu mẫu.
+// Điểm vào app. RootView giữ Store và chuyển giữa hai trạng thái:
+//   - chưa kết nối: ConnectLandingView (nút BLE ở trung tâm)
+//   - đã kết nối:  DeviceInfoView (header thiết bị + danh sách thông tin)
+// Không còn navigation bar/toolbar quét — mọi thao tác nằm trong hai màn hình.
 
 import SwiftUI
 
@@ -18,28 +20,25 @@ struct RootView: View {
     @State private var showScan = false
 
     var body: some View {
-        NavigationStack {
-            DeviceInfoView(store: store, onConnect: { showScan = true })
-                .navigationTitle("Dữ liệu BMS")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button {
-                            showScan = true
-                        } label: {
-                            Image(systemName: "antenna.radiowaves.left.and.right")
-                        }
-                        .accessibilityLabel("Quét & kết nối")
-                        .foregroundStyle(Color.bmsGreen)
-                    }
-                }
-                .sheet(isPresented: $showScan) {
-                    ScanSheet(store: store,
-                              onConnected: { showScan = false })
-                    .presentationDetents([.medium, .large])
-                }
+        ZStack {
+            if store.isConnected {
+                DeviceInfoView(store: store, onDisconnect: { store.disconnect() })
+                    .transition(.opacity)
+            } else {
+                ConnectLandingView(store: store, onConnect: { showScan = true })
+                    .transition(.opacity)
+            }
         }
+        .animation(.easeInOut(duration: 0.22), value: store.isConnected)
         .tint(Color.bmsGreen)
         .preferredColorScheme(.dark)
+        .sheet(isPresented: $showScan) {
+            NavigationStack {
+                ScanSheet(store: store)
+            }
+            .presentationDetents([.medium, .large])
+            .tint(Color.bmsGreen)
+            .preferredColorScheme(.dark)
+        }
     }
 }
