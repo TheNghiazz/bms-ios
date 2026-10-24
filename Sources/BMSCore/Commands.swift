@@ -26,10 +26,15 @@ public enum BMSCommand {
     public static let jkDeviceInfoCmd: UInt8 = 0x97
 
     /// JBD / Xiaoxiang: yêu cầu đọc — 0x03 = thông tin cơ bản (SOC, Ah),
-    /// 0x04 = điện áp từng cell. Khung: DD A5 <cmd> 00 FF <crc> 77.
+    /// 0x04 = điện áp từng cell, 0x05 = tên thiết bị.
+    /// Khung: DD A5 <cmd> 00 FF <crc> 77.
     public static func jbdRead(cmd: UInt8) -> [UInt8] {
         let crc = UInt8((0x100 - (Int(cmd) & 0xFF)) & 0xFF)
         return [0xDD, 0xA5, cmd & 0xFF, 0x00, 0xFF, crc, 0x77]
+    }
+
+    public static func jbdReadDeviceName() -> [UInt8] {
+        jbdRead(cmd: 0x05)
     }
 
     /// Daly: yêu cầu khung trạng thái 0x90. Khung 13 byte, byte cuối là

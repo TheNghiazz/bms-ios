@@ -63,6 +63,9 @@ extension UniversalBmsParser {
         c.cycleCount = be32(data, 83)
         c.runtimeSeconds = be32(data, 87)
         deviceInfo.uptimeSeconds = c.runtimeSeconds
+        var prov = deviceInfoProvenance
+        prov.mark(.uptimeSeconds, if: c.runtimeSeconds > 0)
+        deviceInfoProvenance = prov
 
         c.tempSensor1C = Double(i16be(data, 91))
         c.tempSensor2C = Double(i16be(data, 93))

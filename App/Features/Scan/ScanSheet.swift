@@ -1,7 +1,8 @@
 // ScanSheet.swift
-// Danh sách thiết bị BLE tìm thấy trong vòng quét 6 giây.
-// iOS không cho thấy MAC; tên + RSSI là định danh hiển thị, UUID nội bộ
-// của CBPeripheral mới là khóa kết nối lại (lưu trong Phase 6).
+// Danh sách thiết bị BLE tìm thấy trong vòng quét 8 giây.
+// iOS không cho thấy MAC; UUID nội bộ của CBPeripheral là khóa kết nối.
+// Màn hình này cũng là nơi xem chẩn đoán: đã chọn kênh nào, nhận bao nhiêu
+// byte, bao nhiêu khung hợp lệ.
 
 import SwiftUI
 
@@ -19,28 +20,45 @@ struct ScanSheet: View {
                     Spacer()
                     if store.session.isScanning {
                         ProgressView()
+                    } else {
+                        Button("Quét lại") {
+                            store.session.toggleScanOrConnect()
+                        }
+                        .font(.footnote.weight(.semibold))
                     }
                 }
             }
+
             Section("Thiết bị tìm thấy") {
                 if store.session.devices.isEmpty {
                     Text("Chưa có thiết bị nào")
                         .font(.footnote)
                         .foregroundStyle(Color.bmsMuted)
                 } else {
-                    ForEach(store.session.devices, id: \.self) { name in
+                    ForEach(store.session.devices) { device in
                         Button {
-                            store.session.connect(deviceName: name)
+                            store.connect(deviceID: device.id)
                             onConnected()
                         } label: {
-                            Label(name, systemImage: "circuitboard")
-                                .font(.footnote)
+                            HStack(spacing: 10) {
+                                Label(device.title, systemImage: "circuitboard")
+                                    .font(.footnote)
+                                Spacer()
+                                if store.session.isConnected,
+                                   store.session.connectedDeviceName == device.name {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(Color.bmsGreen)
+                                }
+                            }
                         }
                     }
                 }
             }
+
             if store.isLive || !store.session.diagnostics.isEmpty {
                 Section("Chẩn đoán BLE — \(store.session.readMode.rawValue)") {
+                    diagnosticSummary
+
                     if store.session.readMode == .polling {
                         Button {
                             store.session.pollNow()
@@ -49,12 +67,23 @@ struct ScanSheet: View {
                                 .font(.footnote)
                         }
                     }
+
+                    if store.isLive {
+                        Button {
+                            store.session.requestDeviceInfo()
+                        } label: {
+                            Label("Gửi lại lệnh đọc thông tin", systemImage: "paperplane")
+                                .font(.footnote)
+                        }
+                    }
+
                     if store.session.diagnostics.isEmpty {
-                        Text("Chưa kết nối thiết bị nào để xem dịch vụ.")
+                        Text("Chưa kết nối thiết bị nào để xem service.")
                             .font(.caption2)
                             .foregroundStyle(Color.bmsMuted)
                     } else {
-                        ForEach(store.session.diagnostics, id: \.self) { line in
+                        ForEach(Array(store.session.diagnostics.enumerated()), id: \.offset) {
+                            _, line in
                             Text(line)
                                 .font(.caption2.monospaced())
                                 .foregroundStyle(Color.bmsMuted)
@@ -62,6 +91,7 @@ struct ScanSheet: View {
                     }
                 }
             }
+
             Section("Chế độ demo (không cần BLE)") {
                 ForEach(demoNames, id: \.name) { demo in
                     Button {
@@ -81,7 +111,28 @@ struct ScanSheet: View {
         .background(Color.bmsBg.ignoresSafeArea())
         .tint(Color.bmsGreen)
         .preferredColorScheme(.dark)
-        .onAppear { if !store.isLive { store.session.toggleScanOrConnect() } }
+        .onAppear { store.session.beginScanIfNeeded() }
+    }
+
+    @ViewBuilder
+    private var diagnosticSummary: some View {
+        let session = store.session
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Pha: \(session.phase.rawValue) · \(session.readMode.rawValue)")
+            Text("Kênh dữ liệu: \(session.selectedDataUUID.isEmpty ? "—" : session.selectedDataUUID)"
+                 + " · ghi: \(session.selectedWriteUUID.isEmpty ? "—" : session.selectedWriteUUID)")
+            Text("Nhận \(session.rawPacketCount) gói / \(session.rawByteCount) B"
+                 + " · khung hợp lệ \(session.validFrameCount)")
+            if let age = session.secondsSinceData {
+                Text("Khung cuối: \(age) giây trước")
+            }
+            if let error = session.lastError {
+                Text("Lỗi: \(error)")
+                    .foregroundStyle(Color.bmsRose)
+            }
+        }
+        .font(.caption2.monospaced())
+        .foregroundStyle(Color.bmsMuted)
     }
 
     private var demoNames: [(name: String, title: String)] {

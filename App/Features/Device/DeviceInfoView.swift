@@ -29,10 +29,15 @@ struct DeviceInfoView: View {
 
                 section("Mạch BMS",
                         icon: "cpu",
-                        showRefresh: store.isLive && store.session.readMode == .polling) {
+                        showRefresh: store.isLive) {
                     group(boardRows(live: live))
                 }
                 .reveal(appeared, delay: 0.06, reduceMotion: reduceMotion)
+
+                if store.isLive && !store.session.isStreaming {
+                    waitingCard
+                        .reveal(appeared, delay: 0.09, reduceMotion: reduceMotion)
+                }
 
                 section("Thông tin thiết bị", icon: "memorychip") {
                     group(deviceRows)
@@ -86,12 +91,33 @@ struct DeviceInfoView: View {
 
     // --------------------------------------------------------------- hero
     private func hero(live: BMSLiveTelemetry) -> some View {
-        let statusColor = store.isLive ? Color.bmsGreen : Color.bmsAmber
+        let session = store.session
+        let statusColor: Color
+        let statusLabel: String
+
+        if session.isStreaming {
+            statusColor = .bmsGreen
+            statusLabel = "BLE TRỰC TIẾP"
+        } else if session.isConnected {
+            statusColor = .bmsAmber
+            statusLabel = "ĐÃ KẾT NỐI · CHỜ DỮ LIỆU"
+        } else if store.isDemo {
+            statusColor = .bmsAmber
+            statusLabel = "CHẾ ĐỘ DEMO"
+        } else {
+            statusColor = .bmsRose
+            statusLabel = "CHƯA CÓ KẾT NỐI"
+        }
+
+        let statusText = store.isDemo
+            ? "Dữ liệu mẫu — chưa kết nối mạch"
+            : session.status
 
         return VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 8) {
-                PulsingDot(color: statusColor, animated: !reduceMotion)
-                Text(store.isLive ? "BLE TRỰC TIẾP" : "CHẾ ĐỘ DEMO")
+                PulsingDot(color: statusColor,
+                           animated: !reduceMotion && (session.isStreaming || session.isScanning))
+                Text(statusLabel)
                     .font(.system(size: 10, weight: .bold))
                     .tracking(1.6)
                     .foregroundStyle(statusColor)
@@ -106,14 +132,14 @@ struct DeviceInfoView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
                     .contentTransition(.opacity)
-                Text(store.session.status)
+                Text(statusText)
                     .font(.footnote)
                     .foregroundStyle(Color.bmsMuted)
                     .lineLimit(2)
                     .contentTransition(.opacity)
             }
             .animation(.snappy(duration: 0.3), value: store.parser.bmsBrand)
-            .animation(.snappy(duration: 0.3), value: store.session.status)
+            .animation(.snappy(duration: 0.3), value: session.status)
 
             HStack(spacing: 8) {
                 HeroChip(icon: "point.3.connected.trianglepath.dotted",
@@ -126,8 +152,13 @@ struct DeviceInfoView: View {
                 }
                 if store.isLive {
                     HeroChip(icon: "waveform.path.ecg",
-                             text: store.session.readMode.rawValue,
+                             text: session.readMode.rawValue,
                              tint: .bmsMuted)
+                }
+                if let age = session.secondsSinceData, session.isStreaming {
+                    HeroChip(icon: "clock",
+                             text: age == 0 ? "vừa nhận" : "\(age)s trước",
+                             tint: age <= 3 ? .bmsGreen : .bmsAmber)
                 }
             }
         }
@@ -160,18 +191,21 @@ struct DeviceInfoView: View {
         }
         .shadow(color: statusColor.opacity(0.18), radius: 22, y: 10)
         .animation(.snappy(duration: 0.35), value: store.isLive)
+        .animation(.snappy(duration: 0.35), value: session.isStreaming)
     }
 
     private func connectButton(statusColor: Color) -> some View {
-        Button {
-            if store.isLive {
+        let connected = store.session.isConnected
+        let label = connected ? "Ngắt" : (store.isDemo ? "Kết nối" : "Kết nối lại")
+        return Button {
+            if connected {
                 store.toggleLiveConnection()
             } else {
                 onConnect()
             }
         } label: {
-            Label(store.isLive ? "Ngắt" : "Kết nối",
-                  systemImage: store.isLive ? "xmark" : "antenna.radiowaves.left.and.right")
+            Label(label,
+                  systemImage: connected ? "xmark" : "antenna.radiowaves.left.and.right")
                 .font(.system(size: 12, weight: .semibold))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -181,6 +215,62 @@ struct DeviceInfoView: View {
                 .contentTransition(.opacity)
         }
         .buttonStyle(.plain)
+    }
+
+    // ---------------------------------------------------------- waiting card
+    private var waitingCard: some View {
+        let session = store.session
+        let color: Color = session.phase == .failed ? .bmsRose : .bmsAmber
+        let message: String
+
+        if !session.isConnected {
+            message = "Chưa kết nối mạch. Mở Quét & kết nối để chọn thiết bị BLE."
+        } else if session.rawPacketCount == 0 {
+            message = "Đã kết nối nhưng chưa nhận được byte nào trên "
+                + "\(session.selectedDataUUID.isEmpty ? "kênh dữ liệu" : session.selectedDataUUID)"
+                + ". App đang chờ notify từ mạch."
+        } else {
+            message = "Đã nhận \(session.rawByteCount) byte nhưng chưa có khung BMS hợp lệ. "
+                + "Có thể chọn sai characteristic hoặc mạch dùng giao thức khác."
+        }
+
+        return VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 6) {
+                Image(systemName: session.phase == .failed
+                      ? "exclamationmark.triangle.fill" : "hourglass")
+                Text(session.phase.rawValue.uppercased())
+                    .tracking(1.2)
+                Spacer()
+                if session.isConnected {
+                    Button("Gửi lại lệnh") { session.requestDeviceInfo() }
+                        .font(.caption2.weight(.semibold))
+                }
+            }
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(color)
+
+            Text(message)
+                .font(.footnote)
+                .foregroundStyle(Color.bmsText)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("Kênh: \(session.selectedDataUUID.isEmpty ? "—" : session.selectedDataUUID)"
+                 + " · ghi: \(session.selectedWriteUUID.isEmpty ? "—" : session.selectedWriteUUID)"
+                 + " · nhận \(session.rawPacketCount) gói / \(session.rawByteCount) B"
+                 + " · hợp lệ \(session.validFrameCount)")
+                .font(.caption2.monospaced())
+                .foregroundStyle(Color.bmsMuted)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(color.opacity(0.10))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(color.opacity(0.25), lineWidth: 1)
+        )
     }
 
     // ------------------------------------------------------------- cards
@@ -270,12 +360,17 @@ struct DeviceInfoView: View {
     private var deviceRows: [RowSpec] {
         let info = store.deviceInfo
         return [
-            RowSpec(icon: "tag", label: "Tên", value: info.deviceName),
-            RowSpec(icon: "shippingbox", label: "Model", value: info.vendorId),
-            RowSpec(icon: "barcode", label: "Serial", value: info.serialNumber),
-            RowSpec(icon: "calendar", label: "Ngày SX", value: info.manufacturingDate),
+            RowSpec(icon: "tag", label: "Tên",
+                    value: value(info.deviceName, .deviceName)),
+            RowSpec(icon: "shippingbox", label: "Model",
+                    value: value(info.vendorId, .vendorId)),
+            RowSpec(icon: "barcode", label: "Serial",
+                    value: value(info.serialNumber, .serialNumber)),
+            RowSpec(icon: "calendar", label: "Ngày SX",
+                    value: value(info.manufacturingDate, .manufacturingDate)),
             RowSpec(icon: "numbers", label: "Phiên bản", value: versionText(info)),
-            RowSpec(icon: "person.text.rectangle", label: "Dữ liệu", value: info.userData),
+            RowSpec(icon: "person.text.rectangle", label: "Dữ liệu",
+                    value: value(info.userData, .userData)),
             RowSpec(icon: "clock", label: "Hoạt động", value: activityText(info)),
         ]
     }
@@ -284,27 +379,46 @@ struct DeviceInfoView: View {
         let info = store.deviceInfo
         return [
             RowSpec(icon: "key.fill", label: "PIN BLE",
-                    value: info.devicePasscode, secret: true),
+                    value: value(info.devicePasscode, .devicePasscode),
+                    secret: true),
             RowSpec(icon: "lock.rotation", label: "MK cài đặt",
-                    value: info.setupPasscode, secret: true),
+                    value: value(info.setupPasscode, .setupPasscode),
+                    secret: true),
             RowSpec(icon: "lock.fill", label: "MK kết nối",
-                    value: info.passcode, secret: true),
+                    value: value(info.passcode, .passcode),
+                    secret: true),
         ]
+    }
+
+    /// Dữ liệu demo hiển thị đầy đủ (có nhãn DEMO). Với mạch thật, chỉ hiển
+    /// thị trường thực sự có trong khung — không biến giá trị mặc định của
+    /// decoder thành "đọc được từ mạch".
+    private func value(_ raw: String, _ field: BMSDeviceInfoProvenance.Field) -> String {
+        if store.isDemo { return raw }
+        return store.provenance.has(field) ? raw : ""
     }
 
     private func versionText(_ info: BMSDeviceInfo) -> String {
         var parts: [String] = []
-        if !info.hardwareVersion.isEmpty { parts.append("HW \(info.hardwareVersion)") }
-        if !info.softwareVersion.isEmpty { parts.append("SW \(info.softwareVersion)") }
+        if !info.hardwareVersion.isEmpty,
+           store.isDemo || store.provenance.has(.hardwareVersion) {
+            parts.append("HW \(info.hardwareVersion)")
+        }
+        if !info.softwareVersion.isEmpty,
+           store.isDemo || store.provenance.has(.softwareVersion) {
+            parts.append("SW \(info.softwareVersion)")
+        }
         return parts.joined(separator: " · ")
     }
 
     private func activityText(_ info: BMSDeviceInfo) -> String {
         var parts: [String] = []
-        if info.uptimeSeconds > 0 {
+        let showUptime = store.isDemo || store.provenance.has(.uptimeSeconds)
+        let showPowerOn = store.isDemo || store.provenance.has(.powerOnCount)
+        if showUptime, info.uptimeSeconds > 0 {
             parts.append(BMSFormatting.formatDuration(seconds: info.uptimeSeconds))
         }
-        if info.powerOnCount > 0 {
+        if showPowerOn, info.powerOnCount > 0 {
             parts.append("bật \(info.powerOnCount) lần")
         }
         return parts.joined(separator: " · ")
@@ -372,14 +486,26 @@ struct DeviceInfoView: View {
     }
 
     private var footer: some View {
-        Text(store.isLive
-             ? "Dữ liệu đọc trực tiếp từ mạch qua Bluetooth Low Energy."
-             : "Đang xem dữ liệu mẫu — kết nối BLE để đọc mạch thật.")
+        Text(footerText)
             .font(.caption2)
             .foregroundStyle(Color.bmsMuted)
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
             .padding(.top, 2)
+    }
+
+    private var footerText: String {
+        let session = store.session
+        if store.isDemo {
+            return "Đang xem dữ liệu mẫu — kết nối BLE để đọc mạch thật."
+        }
+        if !session.isConnected {
+            return "Chưa kết nối mạch. Dữ liệu bên trên (nếu có) là lần đọc cuối."
+        }
+        if !session.isStreaming {
+            return "Đã kết nối nhưng chưa có khung hợp lệ — mở Quét & kết nối để xem chẩn đoán."
+        }
+        return "Dữ liệu đọc trực tiếp từ mạch qua BLE · kênh \(session.selectedDataUUID)."
     }
 
     private var backdrop: some View {

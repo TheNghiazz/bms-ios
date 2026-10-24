@@ -47,6 +47,18 @@ extension UniversalBmsParser {
             }
             live = c
             hasCellInfo = true
+
+        } else if cmd == 0x05 {
+            // 0x05: tên thiết bị dạng chuỗi ASCII.
+            let length = Int(data[3])
+            guard length > 0, data.count >= 4 + length else { return }
+            let name = readCString(data, 4, length)
+            guard !name.isEmpty else { return }
+            deviceInfo.deviceName = name
+            var prov = deviceInfoProvenance
+            prov.markString(.deviceName, name)
+            deviceInfoProvenance = prov
+            hasDeviceInfo = true
         }
     }
 }

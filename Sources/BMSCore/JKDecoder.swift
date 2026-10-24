@@ -16,17 +16,28 @@ extension UniversalBmsParser {
         live.detectedBrand = "JK-BMS"
 
         if frameType == 0x03 {
-            let d = deviceInfo
-            var updated = d
-            updated.vendorId = nonEmpty(readCString(data, 6, 16), "JK-BMS")
-            updated.hardwareVersion = nonEmpty(readCString(data, 22, 8), "N/A")
-            updated.softwareVersion = nonEmpty(readCString(data, 30, 8), "N/A")
+            var updated = deviceInfo
+            var prov = deviceInfoProvenance
+
+            let vendor = readCString(data, 6, 16)
+            let hardware = readCString(data, 22, 8)
+            let software = readCString(data, 30, 8)
+            let deviceName = readCString(data, 46, 16)
+            let devicePasscode = readCString(data, 62, 16)
+            let mfg = readCString(data, 78, 8)
+            let serial = readCString(data, 86, 11)
+            let passcode = readCString(data, 97, 5)
+            let userData = readCString(data, 102, 16)
+            let setupPasscode = readCString(data, 118, 16)
+
+            updated.vendorId = nonEmpty(vendor, "JK-BMS")
+            updated.hardwareVersion = nonEmpty(hardware, "N/A")
+            updated.softwareVersion = nonEmpty(software, "N/A")
             updated.uptimeSeconds = le32(data, 38)
             updated.powerOnCount = le32(data, 42)
-            updated.deviceName = nonEmpty(readCString(data, 46, 16), "JK-BMS")
-            updated.devicePasscode = nonEmpty(readCString(data, 62, 16), "1234")
+            updated.deviceName = nonEmpty(deviceName, "JK-BMS")
+            updated.devicePasscode = nonEmpty(devicePasscode, "1234")
 
-            let mfg = readCString(data, 78, 8)
             if mfg.count == 6 && mfg.allSatisfy({ $0.isASCII && $0.isNumber }) {
                 let yy = String(mfg.prefix(2))
                 let mm = String(mfg.dropFirst(2).prefix(2))
@@ -35,11 +46,28 @@ extension UniversalBmsParser {
             } else {
                 updated.manufacturingDate = mfg
             }
-            updated.serialNumber = nonEmpty(readCString(data, 86, 11), "N/A")
-            updated.passcode = nonEmpty(readCString(data, 97, 5), "0000")
-            updated.userData = nonEmpty(readCString(data, 102, 16), "N/A")
-            updated.setupPasscode = nonEmpty(readCString(data, 118, 16), "123456")
+            updated.serialNumber = nonEmpty(serial, "N/A")
+            updated.passcode = nonEmpty(passcode, "0000")
+            updated.userData = nonEmpty(userData, "N/A")
+            updated.setupPasscode = nonEmpty(setupPasscode, "123456")
             deviceInfo = updated
+
+            // Ghi lại trường nào thực sự xuất hiện trong khung. UI dùng dữ
+            // liệu này để không hiển thị "1234"/"JK-BMS" giả khi mạch trả
+            // khung rỗng.
+            prov.markString(.vendorId, vendor)
+            prov.markString(.hardwareVersion, hardware)
+            prov.markString(.softwareVersion, software)
+            prov.mark(.uptimeSeconds, if: updated.uptimeSeconds > 0)
+            prov.mark(.powerOnCount, if: updated.powerOnCount > 0)
+            prov.markString(.deviceName, deviceName)
+            prov.markString(.devicePasscode, devicePasscode)
+            prov.markString(.manufacturingDate, mfg)
+            prov.markString(.serialNumber, serial)
+            prov.markString(.passcode, passcode)
+            prov.markString(.userData, userData)
+            prov.markString(.setupPasscode, setupPasscode)
+            deviceInfoProvenance = prov
 
             let sw = updated.softwareVersion
             live.protocolVersion =

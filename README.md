@@ -16,6 +16,7 @@ App tập trung vào **lấy dữ liệu từ mạch**: hãng/mạch BMS, thông
 bms-ios/
 ├─ Package.swift                  BMSCore (thuần Swift, test được Everywhere)
 ├─ Sources/BMSCore/               parser + 4 decoder + golden check
+│  ├─ Acquisition.swift           chọn kênh BLE tất định (FFE1/FF01/FFF1…)
 │  └─ Resources/golden_vectors.json
 ├─ Sources/BMSCoreCheck/main.swift  chạy check kiểu executable (swift run)
 ├─ Tests/BMSCoreTests/            XCTest
@@ -58,6 +59,9 @@ bms-ios/
   swift test           # XCTest
   swift run bmscore-check   # không cần XCTest
   ```
+  > Trên Windows + Swift 6.4, `swift test` có thể in "Test run with 0 tests"
+  > rồi trả mã 1 dù toàn bộ XCTest đã pass. Dùng
+  > `swift test --disable-swift-testing` để nhận mã thoát 0.
 ### Build BMSCore trên Windows (Swift 6.4+)
 
 Swift 6.4 chuyển stdlib sang **Swift SDK tách rời** — nếu chỉ cài toolchain,
@@ -90,6 +94,34 @@ hoặc copy `link.exe`/`lib.exe` vào `…\Swift\Toolchains\<ver>\usr\bin`.
   ```
   Script chỉ dùng stdlib nên chạy được cả trên Windows, không cần Pillow.
   Bundle ID: `vn.ngia.bmsreader` (khai báo trong `project.yml`).
+
+## Cách app lấy dữ liệu từ mạch (bản siết)
+
+Bản đầu tiên chọn "characteristic notify đầu tiên" và gửi lệnh ngay sau khi gọi
+`setNotifyValue`. Trên JK-BMS thật, cách đó rất dễ trúng `FFE2` (log debug) hoặc
+Battery Level `2A19`, khiến app báo **đã kết nối nhưng không có dữ liệu**. Nay:
+
+1. **Chọn kênh tất định** (`Sources/BMSCore/Acquisition.swift`): ưu tiên
+   `FFE1` (JK), `FF01`/`FF02` (JBD), `FFF1`/`FFF2` (Daly); bỏ `FFE2` và GATT chuẩn.
+2. **Chờ CCCD xác nhận notify/indicate rồi mới gửi lệnh** (tối đa 5 s), có thử
+   kênh kế tiếp và fallback `read` định kỳ.
+3. **Chỉ đẩy dữ liệu của đúng kênh đã chọn** vào parser.
+4. **Kiểm tra khung nghiêm ngặt** trước khi giải mã (JK CRC8, ANT checksum 16-bit,
+   Daly checksum/cmd, JBD cmd/len/trailer + kiểm tra hợp lý) và **khóa hãng**
+   sau khung hợp lệ đầu tiên.
+5. **Watchdog phân biệt** "không nhận byte nào" / "có byte nhưng sai khung" /
+   "có khung nhưng mất nhịp"; màn hình chẩn đoán hiển thị kênh đã chọn, số gói,
+   số byte và số khung hợp lệ.
+6. **UI chỉ hiển thị trường thực sự có trong khung** (provenance), không biến
+   giá trị mặc định của decoder thành dữ liệu mạch thật.
+
+Kết nối lại dùng `CBPeripheral.identifier` (iOS không cho MAC); kết nối có
+timeout 12 s và tự dọn state khi ngắt.
+
+> Đây là bản sửa cho lỗi "kết nối được nhưng không có dữ liệu" trên JK-BMS.
+> Logic đã có unit test và golden vectors; vẫn cần xác nhận lại trên mạch JK
+> thật (Phase 8) — xem mục **Chẩn đoán** trong app để biết kênh đã chọn.
+
 
 ## Màn hình dữ liệu
 

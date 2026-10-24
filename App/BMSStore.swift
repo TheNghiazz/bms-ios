@@ -1,6 +1,9 @@
 // BMSStore.swift
 // Ô chứa trạng thái chung cho UI: parser (golden test đã chuẩn) + phiên BLE.
 // Mọi thay đổi dữ liệu làm bump revision để view render lại.
+//
+// `isDemo` tách bạch dữ liệu mẫu với dữ liệu mạch thật: trước đây chỉ dựa
+// vào isConnected nên khi mất kết nối, dữ liệu thật cũ bị gắn nhãn "demo".
 
 import Combine
 import BMSCore
@@ -14,6 +17,9 @@ final class BMSStore: ObservableObject {
 
     /// Tăng lên mỗi lần dữ liệu (parser hoặc trạng thái BLE) thay đổi.
     @Published private(set) var revision = 0
+
+    /// true = đang xem dữ liệu mẫu; false = đang/đã kết nối mạch thật.
+    @Published private(set) var isDemo = true
 
     private var bag = Set<AnyCancellable>()
 
@@ -30,11 +36,13 @@ final class BMSStore: ObservableObject {
     var live: BMSLiveTelemetry { parser.live }
     var deviceInfo: BMSDeviceInfo { parser.deviceInfo }
     var settingsInfo: BMSSettingsInfo { parser.settingsInfo }
+    var provenance: BMSDeviceInfoProvenance { parser.deviceInfoProvenance }
 
     // ------------------------------------------------------------ demo mode
     func loadDemo(named: String) {
-        session.disconnect()
+        session.disconnect(silent: true)
         parser.reset()
+        isDemo = true
         guard let frames = GoldenVectorStore.framesHex(named: named) else { return }
         for hex in frames {
             guard let data = GoldenVectorCheck.makeData(hex: hex) else { continue }
@@ -44,8 +52,17 @@ final class BMSStore: ObservableObject {
     }
 
     // -------------------------------------------------------------- connect
-    /// true khi phiên BLE đang mở (thay vì đang xem demo).
-    var isLive: Bool { session.isConnected }
+    /// true khi người dùng đang ở chế độ mạch thật (kể cả lúc chờ dữ liệu).
+    var isLive: Bool { !isDemo }
+
+    /// Có khung BMS hợp lệ từ mạch thật trong phiên hiện tại.
+    var hasRealData: Bool { !isDemo && parser.hasAcceptedFrame }
+
+    func connect(deviceID: UUID) {
+        isDemo = false
+        session.connect(deviceID: deviceID)
+        bump()
+    }
 
     func toggleLiveConnection() {
         if session.isConnected {

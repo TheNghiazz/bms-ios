@@ -2,9 +2,9 @@
 // Trợ giúp kiểm tra khung truyền cho các hãng.
 // - JK: CRC8 = tổng byte [0..<299] & 0xFF so với byte 299.
 // - Daly: tổng byte [0..<12] & 0xFF so với byte 12.
-// - JBD: chỉ kiểm trailer 0x77 (khớp hành vi bản gốc).
-// - ANT: bản CHẴNG kiểm tra checksum 2-byte tại 138 (đã ghi chú trong
-//   docs/protocol.md); hàm antChecksum được cung cấp để dùng khi muốn nghiêm ngặt.
+// - JBD: parser kiểm cấu trúc/trailer (firmware dùng biến thể CRC khác nhau).
+// - ANT: checksum 2-byte big-endian tại offset 138 =
+//   sum(byte[4..<138]) & 0xFFFF (parser bắt buộc kiểm).
 
 public enum BMSChecksum {
     /// CRC8 kiểu JK: tổng các byte & 0xFF (calc_crc8 trong bản gốc).

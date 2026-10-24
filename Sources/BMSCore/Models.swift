@@ -4,6 +4,42 @@
 // đơn vị nằm ngay trong tên (V / A / Ah / W ...). Codable để đối chiếu với
 // golden_vectors.json; Equatable để test so khớp chính xác.
 
+/// Ghi nhận trường nào thực sự được đọc từ khung của mạch.
+///
+/// Các decoder giữ nguyên hành vi cũ (có giá trị mặc định như "1234" khi
+/// khung thiếu dữ liệu) để khớp golden vectors. UI dùng provenance để không
+/// hiển thị giá trị mặc định như thể đọc được từ mạch thật.
+public struct BMSDeviceInfoProvenance: Equatable, Sendable {
+    public enum Field: String, CaseIterable, Sendable {
+        case vendorId
+        case hardwareVersion
+        case softwareVersion
+        case uptimeSeconds
+        case powerOnCount
+        case deviceName
+        case devicePasscode
+        case manufacturingDate
+        case serialNumber
+        case passcode
+        case userData
+        case setupPasscode
+    }
+
+    public private(set) var fields: Set<Field> = []
+
+    public init() {}
+
+    public func has(_ field: Field) -> Bool { fields.contains(field) }
+
+    public mutating func mark(_ field: Field, if condition: Bool) {
+        if condition { fields.insert(field) }
+    }
+
+    public mutating func markString(_ field: Field, _ value: String) {
+        mark(field, if: !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+}
+
 public struct BMSDeviceInfo: Codable, Equatable, Sendable {
     public var vendorId: String = ""
     public var hardwareVersion: String = ""
